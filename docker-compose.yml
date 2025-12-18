@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  stewstats:
+    build: .
+    ports:
+      - "8090:8090"
+    volumes:
+      - stewstats_data:/app/pb_data
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+
+volumes:
+  stewstats_data:
+

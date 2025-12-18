@@ -1,0 +1,61 @@
+{{template "base" .}}
+
+{{define "title"}}Dashboard{{end}}
+
+{{define "content"}}
+<h1>Dashboard</h1>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{.TotalSites}}</div>
+        <div class="stat-label">Total Sites</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.TotalPageviews}}</div>
+        <div class="stat-label">Total Pageviews</div>
+    </div>
+</div>
+
+{{if .Sites}}
+<div class="card">
+    <h2>Registered Sites</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Site</th>
+                <th>Domain</th>
+                <th>Pageviews</th>
+                <th>Today</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Sites}}
+            <tr>
+                <td><a href="/sites/{{.ID}}" class="site-link">{{.Name}}</a></td>
+                <td><code>{{.Domain}}</code></td>
+                <td>{{.Pageviews}}</td>
+                <td><span class="badge badge-success">{{.TodayViews}}</span></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<div class="card empty-state">
+    <h3>No sites registered yet</h3>
+    <p>Add a site through the <a href="/_/" class="site-link">Pocketbase Admin</a> to get started.</p>
+</div>
+{{end}}
+
+<div class="card">
+    <h2>Quick Start</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Add this script to your website to start tracking pageviews:</p>
+    <div class="code-block">
+        <code>&lt;script src="{{.TrackerURL}}/tracker.js" async&gt;&lt;/script&gt;</code>
+    </div>
+    <p style="color: var(--text-muted); font-size: 0.85rem;">
+        Make sure to register your domain in the Pocketbase admin first.
+    </p>
+</div>
+{{end}}
+
