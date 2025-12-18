@@ -64,7 +64,7 @@ Visit `http://localhost:8090/_/` to create your Pocketbase admin account.
 Add this script to your website's `<head>` or before `</body>`:
 
 ```html
-<script src="https://your-stewstats-server.com/tracker.js" async></script>
+<script src="http://localhost:8090/tracker.js" async></script>
 ```
 
 Replace `your-stewstats-server.com` with your actual StewStats server URL.

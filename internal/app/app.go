@@ -6,11 +6,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/abigpotostew/stewstats/internal/handlers"
 	"github.com/abigpotostew/stewstats/internal/migrations"
 
 	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -36,6 +38,9 @@ func Run() error {
 		// Create handlers
 		h := handlers.New(app, tmpl)
 
+		// Add custom CORS middleware for /api/ping that runs before everything else
+		e.Router.Use(pingCORSMiddleware(app))
+
 		// PING API endpoint - public with CORS validation
 		e.Router.POST("/api/ping", h.HandlePing)
 
@@ -50,9 +55,6 @@ func Run() error {
 		e.Router.GET("/sites", h.HandleSites)
 		e.Router.GET("/sites/:siteId", h.HandleSiteStats)
 
-		// Serve static files for tracker script
-		e.Router.GET("/static/*", echo.StaticDirectoryHandler(echo.MustSubFS(templatesFS, "templates"), false))
-
 		log.Println("StewStats server started")
 		return nil
 	})
@@ -66,21 +68,40 @@ func Run() error {
 	return app.Start()
 }
 
-// getClientIP extracts the real client IP from request headers
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header first
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		// X-Forwarded-For can contain multiple IPs; the first is the client
-		return xff
-	}
+// pingCORSMiddleware creates a middleware that handles CORS for the /api/ping endpoint
+// This runs before Pocketbase's default CORS to prevent conflicts
+func pingCORSMiddleware(app *pocketbase.PocketBase) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// Only handle /api/ping endpoint
+			if !strings.HasPrefix(c.Request().URL.Path, "/api/ping") {
+				return next(c)
+			}
 
-	// Check X-Real-IP header
-	xri := r.Header.Get("X-Real-IP")
-	if xri != "" {
-		return xri
-	}
+			origin := c.Request().Header.Get("Origin")
+			if origin == "" {
+				return next(c)
+			}
 
-	// Fall back to RemoteAddr
-	return r.RemoteAddr
+			// For OPTIONS preflight, we need to handle it completely here
+			// to prevent Pocketbase's CORS from interfering
+			if c.Request().Method == http.MethodOptions {
+				c.Response().Header().Set("Access-Control-Allow-Origin", origin)
+				c.Response().Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+				c.Response().Header().Set("Access-Control-Allow-Headers", "Content-Type")
+				c.Response().Header().Set("Access-Control-Max-Age", "86400")
+				return c.NoContent(http.StatusNoContent)
+			}
+
+			// For POST requests, set headers before the handler runs
+			c.Response().Header().Set("Access-Control-Allow-Origin", origin)
+			c.Response().Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			c.Response().Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+			return next(c)
+		}
+	}
 }
+
+// Use the middleware package's CORS if needed
+var _ = middleware.CORS

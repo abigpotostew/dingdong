@@ -1,135 +1,313 @@
-{{template "base" .}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Site.Name}} Stats | StewStats</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --border-color: #2a2a3a;
+            --text-primary: #e8e8f0;
+            --text-secondary: #9090a8;
+            --text-muted: #606078;
+            --accent-primary: #7c3aed;
+            --accent-secondary: #a855f7;
+            --accent-glow: rgba(124, 58, 237, 0.3);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
 
-{{define "title"}}{{.Site.Name}} Stats{{end}}
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
-{{define "content"}}
-<h1>{{.Site.Name}} <span style="color: var(--text-muted); font-weight: 400;">{{.Site.Domain}}</span></h1>
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
 
-<div class="stat-grid">
-    <div class="stat-card">
-        <div class="stat-value">{{.TotalViews}}</div>
-        <div class="stat-label">Total Views</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{.TodayViews}}</div>
-        <div class="stat-label">Today</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{.UniqueVisitors}}</div>
-        <div class="stat-label">Unique Visitors</div>
-    </div>
-</div>
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
-    <div class="card">
-        <h2>Top Pages</h2>
-        {{if .TopPages}}
-        <table>
-            <thead>
-                <tr>
-                    <th>Path</th>
-                    <th>Views</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .TopPages}}
-                <tr>
-                    <td><code>{{.Path}}</code></td>
-                    <td>{{.Views}}</td>
-                </tr>
+        header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo::before { content: '📊'; -webkit-text-fill-color: initial; }
+
+        nav { display: flex; gap: 1.5rem; }
+
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+        }
+
+        nav a:hover { color: var(--text-primary); background: var(--bg-card); }
+
+        h1, h2, h3 { font-weight: 600; letter-spacing: -0.02em; }
+        h1 { font-size: 2rem; margin-bottom: 1.5rem; }
+        h2 { font-size: 1.25rem; margin-bottom: 1rem; color: var(--text-secondary); }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover { border-color: var(--accent-primary); box-shadow: 0 0 20px var(--accent-glow); }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 0.5rem;
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--text-muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; }
+        tr:hover td { background: var(--bg-secondary); }
+
+        .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-success { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+
+        a.site-link { color: var(--accent-secondary); text-decoration: none; transition: color 0.2s; }
+        a.site-link:hover { color: var(--text-primary); text-decoration: underline; }
+
+        .code-block {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .code-block code { color: var(--accent-secondary); }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 4rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <a href="/" class="logo">StewStats</a>
+            <nav>
+                <a href="/">Dashboard</a>
+                <a href="/_/">Admin</a>
+            </nav>
+        </div>
+    </header>
+    <main class="container">
+        <h1>{{.Site.Name}} <span style="color: var(--text-muted); font-weight: 400;">{{.Site.Domain}}</span></h1>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{.TotalViews}}</div>
+                <div class="stat-label">Total Views</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{.TodayViews}}</div>
+                <div class="stat-label">Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{.UniqueVisitors}}</div>
+                <div class="stat-label">Unique Visitors</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h2>Top Pages</h2>
+                {{if .TopPages}}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Path</th>
+                            <th>Views</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .TopPages}}
+                        <tr>
+                            <td><code>{{.Path}}</code></td>
+                            <td>{{.Views}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+                {{else}}
+                <p style="color: var(--text-muted); padding: 1rem 0;">No pageviews recorded yet.</p>
                 {{end}}
-            </tbody>
-        </table>
-        {{else}}
-        <p style="color: var(--text-muted); padding: 1rem 0;">No pageviews recorded yet.</p>
-        {{end}}
-    </div>
+            </div>
 
-    <div class="card">
-        <h2>Top Referrers</h2>
-        {{if .TopReferrers}}
-        <table>
-            <thead>
-                <tr>
-                    <th>Referrer</th>
-                    <th>Views</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .TopReferrers}}
-                <tr>
-                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{.Referrer}}</td>
-                    <td>{{.Views}}</td>
-                </tr>
+            <div class="card">
+                <h2>Top Referrers</h2>
+                {{if .TopReferrers}}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Referrer</th>
+                            <th>Views</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .TopReferrers}}
+                        <tr>
+                            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{.Referrer}}</td>
+                            <td>{{.Views}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+                {{else}}
+                <p style="color: var(--text-muted); padding: 1rem 0;">No referrer data yet.</p>
                 {{end}}
-            </tbody>
-        </table>
-        {{else}}
-        <p style="color: var(--text-muted); padding: 1rem 0;">No referrer data yet.</p>
-        {{end}}
-    </div>
-</div>
+            </div>
+        </div>
 
-<div class="card">
-    <h2>Daily Stats (Last 30 Days)</h2>
-    {{if .DailyStats}}
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Views</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .DailyStats}}
-            <tr>
-                <td>{{.Date}}</td>
-                <td>{{.Views}}</td>
-                <td style="width: 60%;">
-                    <div style="background: var(--accent-primary); height: 8px; border-radius: 4px; width: {{.Views}}0px; max-width: 100%;"></div>
-                </td>
-            </tr>
+        <div class="card">
+            <h2>Daily Stats (Last 30 Days)</h2>
+            {{if .DailyStats}}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Views</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .DailyStats}}
+                    <tr>
+                        <td>{{.Date}}</td>
+                        <td>{{.Views}}</td>
+                        <td style="width: 60%;">
+                            <div style="background: var(--accent-primary); height: 8px; border-radius: 4px; width: {{.Views}}0px; max-width: 100%;"></div>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <p style="color: var(--text-muted); padding: 1rem 0;">No daily data yet.</p>
             {{end}}
-        </tbody>
-    </table>
-    {{else}}
-    <p style="color: var(--text-muted); padding: 1rem 0;">No daily data yet.</p>
-    {{end}}
-</div>
+        </div>
 
-<div class="card">
-    <h2>Recent Pageviews</h2>
-    {{if .RecentViews}}
-    <table>
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th>Path</th>
-                <th>Referrer</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .RecentViews}}
-            <tr>
-                <td style="white-space: nowrap; color: var(--text-muted);">{{.CreatedAt.Format "Jan 02 15:04"}}</td>
-                <td><code>{{.Path}}</code></td>
-                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted);">{{if .Referrer}}{{.Referrer}}{{else}}<em>Direct</em>{{end}}</td>
-            </tr>
+        <div class="card">
+            <h2>Recent Pageviews</h2>
+            {{if .RecentViews}}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Path</th>
+                        <th>Referrer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .RecentViews}}
+                    <tr>
+                        <td style="white-space: nowrap; color: var(--text-muted);">{{.CreatedAt.Format "Jan 02 15:04"}}</td>
+                        <td><code>{{.Path}}</code></td>
+                        <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted);">{{if .Referrer}}{{.Referrer}}{{else}}<em>Direct</em>{{end}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <p style="color: var(--text-muted); padding: 1rem 0;">No pageviews recorded yet.</p>
             {{end}}
-        </tbody>
-    </table>
-    {{else}}
-    <p style="color: var(--text-muted); padding: 1rem 0;">No pageviews recorded yet.</p>
-    {{end}}
-</div>
+        </div>
 
-<div class="card">
-    <h2>Tracking Code</h2>
-    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Add this script to your website:</p>
-    <div class="code-block">
-        <code>&lt;script src="{{.TrackerURL}}/tracker.js" async&gt;&lt;/script&gt;</code>
-    </div>
-</div>
-{{end}}
-
+        <div class="card">
+            <h2>Tracking Code</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Add this script to your website:</p>
+            <div class="code-block">
+                <code>&lt;script src="{{.TrackerURL}}/tracker.js" async&gt;&lt;/script&gt;</code>
+            </div>
+        </div>
+    </main>
+    <footer>
+        <p>StewStats — Privacy-friendly web analytics</p>
+    </footer>
+</body>
+</html>
