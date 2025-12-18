@@ -11,7 +11,8 @@ services:
     environment:
       - TZ=UTC
       # Set this to your public URL (required for tracker script)
-      - PUBLIC_URL=http://localhost:8090
+      - PUBLIC_URL=https://dingdong.stewart.codes
+      # - PUBLIC_URL=http://localhost:8090
     # healthcheck:
     #   test:
     #     [
