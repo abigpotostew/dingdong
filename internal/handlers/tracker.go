@@ -95,18 +95,8 @@ func GetPublicURL(c echo.Context) string {
 		return strings.TrimSuffix(publicURL, "/")
 	}
 
-	println("GetPublicURL using derived from request: ", c.Request().Host)
-	// Fall back to request-based detection
-	scheme := "https"
-	if c.Request().TLS == nil {
-		forwardedProto := c.Request().Header.Get("X-Forwarded-Proto")
-		if forwardedProto != "" {
-			scheme = forwardedProto
-		} else {
-			scheme = "http"
-		}
-	}
-	return scheme + "://" + c.Request().Host
+	panic("PUBLIC_URL is not set")
+
 }
 
 // HandleTrackerScript serves the JavaScript tracker with the correct endpoint
