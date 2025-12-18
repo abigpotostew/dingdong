@@ -117,9 +117,10 @@ dingdong/
 
 | Field | Type | Description |
 |-------|------|-------------|
-| domain | text | The registered domain for CORS validation |
+| domain | text | The primary domain for CORS validation |
 | name | text | Friendly name for the site |
 | active | bool | Whether tracking is enabled |
+| additional_domains | text | Comma-separated list of additional domains/subdomains (e.g., `www.example.com, blog.example.com`) |
 
 ### Pageviews Collection
 

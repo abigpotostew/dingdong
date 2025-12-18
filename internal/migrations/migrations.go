@@ -17,6 +17,11 @@ func Register(app *pocketbase.PocketBase) {
 			return err
 		}
 
+		// Migrate existing sites collection to add new fields
+		if err := migrateSitesCollection(app); err != nil {
+			return err
+		}
+
 		// Create pageviews collection (analytics data)
 		if err := createPageviewsCollection(app); err != nil {
 			return err
@@ -66,11 +71,44 @@ func createSitesCollection(app *pocketbase.PocketBase) error {
 				Type:     schema.FieldTypeBool,
 				Required: false,
 			},
+			&schema.SchemaField{
+				Name:     "additional_domains",
+				Type:     schema.FieldTypeText,
+				Required: false,
+				Options: &schema.TextOptions{
+					Max: types.Pointer(1024),
+				},
+			},
 		),
 		Indexes: types.JsonArray[string]{
 			"CREATE INDEX idx_sites_domain ON sites (domain)",
 		},
 	}
+
+	return app.Dao().SaveCollection(collection)
+}
+
+// migrateSitesCollection adds new fields to existing sites collection
+func migrateSitesCollection(app *pocketbase.PocketBase) error {
+	collection, err := app.Dao().FindCollectionByNameOrId("sites")
+	if err != nil {
+		return nil // Collection doesn't exist, nothing to migrate
+	}
+
+	// Check if additional_domains field already exists
+	if collection.Schema.GetFieldByName("additional_domains") != nil {
+		return nil // Already migrated
+	}
+
+	// Add the additional_domains field
+	collection.Schema.AddField(&schema.SchemaField{
+		Name:     "additional_domains",
+		Type:     schema.FieldTypeText,
+		Required: false,
+		Options: &schema.TextOptions{
+			Max: types.Pointer(1024),
+		},
+	})
 
 	return app.Dao().SaveCollection(collection)
 }

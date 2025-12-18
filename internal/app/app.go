@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
 	"github.com/abigpotostew/dingdong/internal/handlers"
 	"github.com/abigpotostew/dingdong/internal/migrations"
@@ -91,18 +90,10 @@ func pingCORSMiddleware(app *pocketbase.PocketBase) echo.MiddlewareFunc {
 				return next(c)
 			}
 
-			domain := parsedOrigin.Host
-			// Remove port if present
-			if colonIdx := strings.LastIndex(domain, ":"); colonIdx != -1 {
-				if !strings.Contains(domain, "]") || strings.LastIndex(domain, "]") < colonIdx {
-					domain = domain[:colonIdx]
-				}
-			}
+			domain := handlers.ExtractDomain(parsedOrigin.Host)
 
-			// Check if domain is registered
-			_, err = app.Dao().FindFirstRecordByFilter("sites", "domain = {:domain} && active = true", map[string]any{
-				"domain": domain,
-			})
+			// Check if domain is registered (checks primary domain and additional_domains)
+			_, err = handlers.FindSiteByDomain(app, domain)
 			if err != nil {
 				// Domain not registered - don't set CORS headers, browser will block
 				if c.Request().Method == http.MethodOptions {

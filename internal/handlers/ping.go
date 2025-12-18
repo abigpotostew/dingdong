@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/models"
@@ -40,12 +39,10 @@ func (h *Handlers) HandlePingPreflight(c echo.Context) error {
 	if err != nil {
 		return c.NoContent(http.StatusNoContent)
 	}
-	domain := extractDomain(parsedOrigin.Host)
+	domain := ExtractDomain(parsedOrigin.Host)
 
-	// Look up the site by domain
-	_, err = h.app.Dao().FindFirstRecordByFilter("sites", "domain = {:domain} && active = true", map[string]any{
-		"domain": domain,
-	})
+	// Look up the site by domain (checks primary domain and additional_domains)
+	_, err = FindSiteByDomain(h.app, domain)
 	if err != nil {
 		// Return forbidden without CORS headers - browser will block
 		return c.NoContent(http.StatusForbidden)
@@ -74,12 +71,10 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 			"error": "Invalid Origin header",
 		})
 	}
-	domain := extractDomain(parsedOrigin.Host)
+	domain := ExtractDomain(parsedOrigin.Host)
 
-	// Look up the site by domain
-	site, err := h.app.Dao().FindFirstRecordByFilter("sites", "domain = {:domain} && active = true", map[string]any{
-		"domain": domain,
-	})
+	// Look up the site by domain (checks primary domain and additional_domains)
+	site, err := FindSiteByDomain(h.app, domain)
 	if err != nil {
 		// Site not registered - reject
 		return c.JSON(http.StatusForbidden, map[string]string{
@@ -131,18 +126,6 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"status": "ok",
 	})
-}
-
-// extractDomain removes port from host if present
-func extractDomain(host string) string {
-	// Remove port if present for domain matching
-	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
-		// Check if this is not an IPv6 address
-		if !strings.Contains(host, "]") || strings.LastIndex(host, "]") < colonIdx {
-			return host[:colonIdx]
-		}
-	}
-	return host
 }
 
 // hashIP creates a privacy-preserving hash of the IP address
