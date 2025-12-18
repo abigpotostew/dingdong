@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/abigpotostew/stewstats/internal/migrations"
 
 	"github.com/labstack/echo/v5"
-	"github.com/labstack/echo/v5/middleware"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -38,13 +38,13 @@ func Run() error {
 		// Create handlers
 		h := handlers.New(app, tmpl)
 
-		// Add custom CORS middleware for /api/ping that runs before everything else
-		e.Router.Use(pingCORSMiddleware(app))
+		// Add custom CORS middleware for /api/ping using Pre() to run BEFORE Pocketbase's CORS
+		e.Router.Pre(pingCORSMiddleware(app))
 
 		// PING API endpoint - public with CORS validation
 		e.Router.POST("/api/ping", h.HandlePing)
 
-		// Handle CORS preflight for ping endpoint
+		// Handle CORS preflight for ping endpoint (backup, Pre middleware should handle it)
 		e.Router.OPTIONS("/api/ping", h.HandlePingPreflight)
 
 		// Tracker script endpoint - serves JavaScript with proper content-type
@@ -69,12 +69,14 @@ func Run() error {
 }
 
 // pingCORSMiddleware creates a middleware that handles CORS for the /api/ping endpoint
-// This runs before Pocketbase's default CORS to prevent conflicts
+// Using Pre() ensures this runs BEFORE Pocketbase's default CORS middleware
 func pingCORSMiddleware(app *pocketbase.PocketBase) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			path := c.Request().URL.Path
+
 			// Only handle /api/ping endpoint
-			if !strings.HasPrefix(c.Request().URL.Path, "/api/ping") {
+			if path != "/api/ping" {
 				return next(c)
 			}
 
@@ -83,25 +85,45 @@ func pingCORSMiddleware(app *pocketbase.PocketBase) echo.MiddlewareFunc {
 				return next(c)
 			}
 
-			// For OPTIONS preflight, we need to handle it completely here
-			// to prevent Pocketbase's CORS from interfering
-			if c.Request().Method == http.MethodOptions {
-				c.Response().Header().Set("Access-Control-Allow-Origin", origin)
-				c.Response().Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-				c.Response().Header().Set("Access-Control-Allow-Headers", "Content-Type")
-				c.Response().Header().Set("Access-Control-Max-Age", "86400")
-				return c.NoContent(http.StatusNoContent)
+			// Validate the origin against registered domains
+			parsedOrigin, err := url.Parse(origin)
+			if err != nil {
+				return next(c)
 			}
 
-			// For POST requests, set headers before the handler runs
+			domain := parsedOrigin.Host
+			// Remove port if present
+			if colonIdx := strings.LastIndex(domain, ":"); colonIdx != -1 {
+				if !strings.Contains(domain, "]") || strings.LastIndex(domain, "]") < colonIdx {
+					domain = domain[:colonIdx]
+				}
+			}
+
+			// Check if domain is registered
+			_, err = app.Dao().FindFirstRecordByFilter("sites", "domain = {:domain} && active = true", map[string]any{
+				"domain": domain,
+			})
+			if err != nil {
+				// Domain not registered - don't set CORS headers, browser will block
+				if c.Request().Method == http.MethodOptions {
+					return c.NoContent(http.StatusForbidden)
+				}
+				return next(c)
+			}
+
+			// Set CORS headers for allowed origin (not wildcard!)
 			c.Response().Header().Set("Access-Control-Allow-Origin", origin)
 			c.Response().Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 			c.Response().Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			c.Response().Header().Set("Access-Control-Max-Age", "86400")
+
+			// For OPTIONS preflight, respond immediately and don't continue
+			// This prevents Pocketbase's CORS from overriding our headers
+			if c.Request().Method == http.MethodOptions {
+				return c.NoContent(http.StatusNoContent)
+			}
 
 			return next(c)
 		}
 	}
 }
-
-// Use the middleware package's CORS if needed
-var _ = middleware.CORS
