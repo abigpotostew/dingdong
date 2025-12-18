@@ -91,6 +91,7 @@ func GetPublicURL(c echo.Context) string {
 	// Check environment variable first
 	if publicURL := os.Getenv("PUBLIC_URL"); publicURL != "" {
 		// Remove trailing slash if present
+		println("GetPublicURL using environment variable: ", publicURL)
 		return strings.TrimSuffix(publicURL, "/")
 	}
 

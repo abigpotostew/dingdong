@@ -29,6 +29,8 @@ func Run() error {
 		return err
 	}
 
+	println("PUBLIC_URL is: ", os.Getenv("PUBLIC_URL"))
+
 	// Register migrations for database schema
 	migrations.Register(app)
 

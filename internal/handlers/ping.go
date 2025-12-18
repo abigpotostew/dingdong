@@ -3,6 +3,9 @@ package handlers
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -59,6 +62,7 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 	// Get the Origin header for CORS validation
 	origin := c.Request().Header.Get("Origin")
 	if origin == "" {
+		log.Println("[ping] Missing Origin header")
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Missing Origin header",
 		})
@@ -67,6 +71,7 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 	// Parse the origin to get the domain
 	parsedOrigin, err := url.Parse(origin)
 	if err != nil {
+		log.Printf("[ping] Invalid Origin header: %s, error: %v\n", origin, err)
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid Origin header",
 		})
@@ -76,7 +81,7 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 	// Look up the site by domain (checks primary domain and additional_domains)
 	site, err := FindSiteByDomain(h.app, domain)
 	if err != nil {
-		// Site not registered - reject
+		log.Printf("[ping] Domain not registered: %s\n", domain)
 		return c.JSON(http.StatusForbidden, map[string]string{
 			"error": "Domain not registered",
 		})
@@ -85,11 +90,28 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 	// Set CORS headers for the allowed origin
 	setCORSHeaders(c, origin)
 
-	// Parse the request body
-	var req PingRequest
-	if err := c.Bind(&req); err != nil {
+	// Read and parse the request body manually for better error handling
+	body, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		log.Printf("[ping] Failed to read body: %v\n", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body",
+			"error": "Failed to read request body",
+		})
+	}
+
+	// Handle empty body gracefully
+	if len(body) == 0 {
+		log.Println("[ping] Empty request body")
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Empty request body",
+		})
+	}
+
+	var req PingRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Printf("[ping] Failed to parse JSON body: %v, body: %s\n", err, string(body))
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid JSON in request body",
 		})
 	}
 
@@ -103,6 +125,7 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 	// Create pageview record
 	collection, err := h.app.Dao().FindCollectionByNameOrId("pageviews")
 	if err != nil {
+		log.Printf("[ping] Failed to find pageviews collection: %v\n", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Internal error",
 		})
@@ -118,11 +141,13 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 	record.Set("screen_height", req.ScreenHeight)
 
 	if err := h.app.Dao().SaveRecord(record); err != nil {
+		log.Printf("[ping] Failed to save pageview: %v\n", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to record pageview",
 		})
 	}
 
+	log.Printf("[ping] Recorded pageview for %s: %s\n", domain, req.Path)
 	return c.JSON(http.StatusOK, map[string]string{
 		"status": "ok",
 	})
