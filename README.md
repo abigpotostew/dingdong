@@ -64,10 +64,20 @@ Visit `http://localhost:8090/_/` to create your Pocketbase admin account.
 Add this script to your website's `<head>` or before `</body>`:
 
 ```html
-<script src="http://localhost:8090/tracker.js" async></script>
+<script src="https://stats.example.com/tracker.js" async></script>
 ```
 
-Replace `your-dingdong-server.com` with your actual DingDong server URL.
+Replace `stats.example.com` with your actual DingDong server URL.
+
+#### Custom Endpoint Override
+
+You can override the tracking endpoint using a `data-endpoint` attribute:
+
+```html
+<script src="https://stats.example.com/tracker.js" data-endpoint="https://custom.example.com" async></script>
+```
+
+This is useful when serving the tracker script from a CDN or different domain than the API.
 
 ## Architecture
 

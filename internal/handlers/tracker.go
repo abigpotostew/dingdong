@@ -11,8 +11,14 @@ import (
 const trackerScript = `(function() {
   'use strict';
   
-  // Configuration
-  var endpoint = '{{ENDPOINT}}';
+  // Find the current script tag to read data attributes
+  var scripts = document.getElementsByTagName('script');
+  var currentScript = scripts[scripts.length - 1];
+  
+  // Configuration - check data-endpoint attribute first, then fall back to default
+  var endpoint = currentScript.getAttribute('data-endpoint') || '{{ENDPOINT}}';
+  // Remove trailing slash if present
+  endpoint = endpoint.replace(/\/$/, '');
   
   // Collect page data
   function collectData() {
@@ -88,6 +94,7 @@ func GetPublicURL(c echo.Context) string {
 		return strings.TrimSuffix(publicURL, "/")
 	}
 
+	println("GetPublicURL using derived from request: ", c.Request().Host)
 	// Fall back to request-based detection
 	scheme := "https"
 	if c.Request().TLS == nil {
