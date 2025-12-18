@@ -1,4 +1,4 @@
-module github.com/abigpotostew/stewstats
+module github.com/abigpotostew/dingdong
 
 go 1.22.0
 

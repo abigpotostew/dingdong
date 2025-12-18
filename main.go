@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/abigpotostew/stewstats/internal/app"
+	"github.com/abigpotostew/dingdong/internal/app"
 )
 
 func main() {

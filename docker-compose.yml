@@ -1,12 +1,12 @@
 services:
-  stewstats:
+  dingdong:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8090:8090"
     volumes:
-      - stewstats_data:/app/pb_data
+      - dingdong_data:/app/pb_data
     restart: unless-stopped
     environment:
       - TZ=UTC
@@ -26,5 +26,5 @@ services:
     #   start_period: 40s
 
 volumes:
-  stewstats_data:
+  dingdong_data:
 

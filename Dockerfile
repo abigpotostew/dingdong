@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -o stewstats -ldflags="-s -w" .
+RUN CGO_ENABLED=1 GOOS=linux go build -o dingdong -ldflags="-s -w" .
 
 # Runtime stage
 FROM alpine:3.19
@@ -28,7 +28,7 @@ RUN apk add --no-cache ca-certificates tzdata
 RUN adduser -D -g '' appuser
 
 # Copy the binary from builder
-COPY --from=builder /app/stewstats .
+COPY --from=builder /app/dingdong .
 
 # Create data directory for Pocketbase
 RUN mkdir -p /app/pb_data && chown -R appuser:appuser /app
@@ -42,4 +42,4 @@ EXPOSE 8090
 VOLUME ["/app/pb_data"]
 
 # Run the application
-CMD ["./stewstats", "serve", "--http=0.0.0.0:8090"]
+CMD ["./dingdong", "serve", "--http=0.0.0.0:8090"]

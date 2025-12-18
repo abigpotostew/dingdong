@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/abigpotostew/stewstats/internal/handlers"
-	"github.com/abigpotostew/stewstats/internal/migrations"
+	"github.com/abigpotostew/dingdong/internal/handlers"
+	"github.com/abigpotostew/dingdong/internal/migrations"
 
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
@@ -55,7 +55,7 @@ func Run() error {
 		e.Router.GET("/sites", h.HandleSites)
 		e.Router.GET("/sites/:siteId", h.HandleSiteStats)
 
-		log.Println("StewStats server started")
+		log.Println("DingDong server started")
 		return nil
 	})
 

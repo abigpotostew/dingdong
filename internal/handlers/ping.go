@@ -148,6 +148,6 @@ func extractDomain(host string) string {
 // hashIP creates a privacy-preserving hash of the IP address
 func hashIP(ip string) string {
 	// Use a static salt (in production, could use daily rotating salt)
-	hash := sha256.Sum256([]byte(ip + "-stewstats"))
+	hash := sha256.Sum256([]byte(ip + "-dingdong"))
 	return hex.EncodeToString(hash[:8]) // Only use first 8 bytes
 }

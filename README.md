@@ -1,4 +1,4 @@
-# StewStats
+# DingDong
 
 A privacy-friendly web analytics tracker built with Go and Pocketbase.
 
@@ -17,8 +17,8 @@ A privacy-friendly web analytics tracker built with Go and Pocketbase.
 
 ```bash
 # Clone the repository
-git clone https://github.com/abigpotostew/stewstats.git
-cd stewstats
+git clone https://github.com/abigpotostew/dingdong.git
+cd dingdong
 
 # Start the server
 docker-compose up -d
@@ -30,8 +30,8 @@ docker-compose up -d
 ### Using Docker
 
 ```bash
-docker build -t stewstats .
-docker run -d -p 8090:8090 -v stewstats_data:/app/pb_data stewstats
+docker build -t dingdong .
+docker run -d -p 8090:8090 -v dingdong_data:/app/pb_data dingdong
 ```
 
 ### From Source
@@ -67,12 +67,12 @@ Add this script to your website's `<head>` or before `</body>`:
 <script src="http://localhost:8090/tracker.js" async></script>
 ```
 
-Replace `your-stewstats-server.com` with your actual StewStats server URL.
+Replace `your-dingdong-server.com` with your actual DingDong server URL.
 
 ## Architecture
 
 ```
-stewstats/
+dingdong/
 ├── main.go                     # Entry point
 ├── internal/
 │   ├── app/
@@ -126,10 +126,10 @@ stewstats/
 
 ## Configuration
 
-StewStats uses Pocketbase's default configuration. You can customize it with command-line flags:
+DingDong uses Pocketbase's default configuration. You can customize it with command-line flags:
 
 ```bash
-./stewstats serve \
+./dingdong serve \
   --http=0.0.0.0:8090 \
   --dir=/path/to/pb_data
 ```
@@ -141,12 +141,12 @@ StewStats uses Pocketbase's default configuration. You can customize it with com
 go run . serve --http=0.0.0.0:8090
 
 # Build for production
-go build -o stewstats -ldflags="-s -w" .
+go build -o dingdong -ldflags="-s -w" .
 ```
 
 ## Privacy
 
-StewStats is designed with privacy in mind:
+DingDong is designed with privacy in mind:
 
 - **No Cookies**: Tracking works without cookies
 - **IP Hashing**: IP addresses are hashed before storage
