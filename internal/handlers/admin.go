@@ -65,20 +65,6 @@ type PageviewRecord struct {
 	UserAgent string
 }
 
-// getTrackerURL builds the tracker URL from the request
-func getTrackerURL(c echo.Context) string {
-	scheme := "https"
-	if c.Request().TLS == nil {
-		forwardedProto := c.Request().Header.Get("X-Forwarded-Proto")
-		if forwardedProto != "" {
-			scheme = forwardedProto
-		} else {
-			scheme = "http"
-		}
-	}
-	return scheme + "://" + c.Request().Host
-}
-
 // HandleDashboard renders the main dashboard showing all sites
 func (h *Handlers) HandleDashboard(c echo.Context) error {
 	// Get all sites
@@ -90,7 +76,7 @@ func (h *Handlers) HandleDashboard(c echo.Context) error {
 	data := DashboardData{
 		Sites:      make([]SiteSummary, 0, len(sites)),
 		TotalSites: len(sites),
-		TrackerURL: getTrackerURL(c),
+		TrackerURL: GetPublicURL(c),
 	}
 
 	// Get pageview counts for each site
@@ -152,7 +138,7 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 			Domain: site.GetString("domain"),
 		},
 		TotalViews: len(pageviews),
-		TrackerURL: getTrackerURL(c),
+		TrackerURL: GetPublicURL(c),
 	}
 
 	// Calculate stats

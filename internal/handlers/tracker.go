@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"os"
 	"strings"
 
 	"github.com/labstack/echo/v5"
@@ -78,9 +79,16 @@ const trackerScript = `(function() {
   };
 })();`
 
-// HandleTrackerScript serves the JavaScript tracker with the correct endpoint
-func (h *Handlers) HandleTrackerScript(c echo.Context) error {
-	// Determine the endpoint from the request
+// GetPublicURL returns the public URL for the application
+// It checks the PUBLIC_URL environment variable first, then falls back to request-based detection
+func GetPublicURL(c echo.Context) string {
+	// Check environment variable first
+	if publicURL := os.Getenv("PUBLIC_URL"); publicURL != "" {
+		// Remove trailing slash if present
+		return strings.TrimSuffix(publicURL, "/")
+	}
+
+	// Fall back to request-based detection
 	scheme := "https"
 	if c.Request().TLS == nil {
 		forwardedProto := c.Request().Header.Get("X-Forwarded-Proto")
@@ -90,8 +98,12 @@ func (h *Handlers) HandleTrackerScript(c echo.Context) error {
 			scheme = "http"
 		}
 	}
-	host := c.Request().Host
-	endpoint := scheme + "://" + host
+	return scheme + "://" + c.Request().Host
+}
+
+// HandleTrackerScript serves the JavaScript tracker with the correct endpoint
+func (h *Handlers) HandleTrackerScript(c echo.Context) error {
+	endpoint := GetPublicURL(c)
 
 	// Replace the placeholder with the actual endpoint
 	script := strings.ReplaceAll(trackerScript, "{{ENDPOINT}}", endpoint)

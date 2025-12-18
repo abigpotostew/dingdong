@@ -126,12 +126,27 @@ dingdong/
 
 ## Configuration
 
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PUBLIC_URL` | Public URL where DingDong is accessible (e.g., `https://stats.example.com`) | Auto-detected from request |
+
+### Command-line Flags
+
 DingDong uses Pocketbase's default configuration. You can customize it with command-line flags:
 
 ```bash
 ./dingdong serve \
   --http=0.0.0.0:8090 \
   --dir=/path/to/pb_data
+```
+
+### Docker Example
+
+```yaml
+environment:
+  - PUBLIC_URL=https://stats.example.com
 ```
 
 ## Development

@@ -10,6 +10,8 @@ services:
     restart: unless-stopped
     environment:
       - TZ=UTC
+      # Set this to your public URL (required for tracker script)
+      - PUBLIC_URL=http://localhost:8090
     # healthcheck:
     #   test:
     #     [
