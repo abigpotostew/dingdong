@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/models"
@@ -117,7 +118,7 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 
 	// Get client info
 	userAgent := c.Request().Header.Get("User-Agent")
-	clientIP := c.RealIP()
+	clientIP := getRealClientIP(c)
 
 	// Hash the IP for privacy
 	ipHash := hashIP(clientIP)
@@ -151,6 +152,38 @@ func (h *Handlers) HandlePing(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"status": "ok",
 	})
+}
+
+// getRealClientIP extracts the real client IP from request headers
+// Checks proxy headers in priority order: Cloudflare, then standard proxy headers
+func getRealClientIP(c echo.Context) string {
+	// Cloudflare: CF-Connecting-IP is the most reliable for Cloudflare Tunnel
+	if ip := c.Request().Header.Get("CF-Connecting-IP"); ip != "" {
+		return ip
+	}
+
+	// Standard proxy header: True-Client-IP (used by some CDNs)
+	if ip := c.Request().Header.Get("True-Client-IP"); ip != "" {
+		return ip
+	}
+
+	// X-Real-IP (common proxy header)
+	if ip := c.Request().Header.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+
+	// X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2, ...
+	// The first one is typically the real client
+	if xff := c.Request().Header.Get("X-Forwarded-For"); xff != "" {
+		// Split by comma and take the first IP
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	// Fall back to Echo's RealIP (which also checks some headers)
+	return c.RealIP()
 }
 
 // hashIP creates a privacy-preserving hash of the IP address
