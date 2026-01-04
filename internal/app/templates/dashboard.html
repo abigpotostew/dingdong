@@ -162,6 +162,9 @@
             margin-top: 4rem;
         }
     </style>
+    <!-- <script src="/tracker.js" data-endpoint="/" async></script> -->
+
+
 </head>
 <body>
     <header>
@@ -222,7 +225,7 @@
             <h2>Quick Start</h2>
             <p style="color: var(--text-secondary); margin-bottom: 1rem;">Add this script to your website to start tracking pageviews:</p>
             <div class="code-block">
-                <code>&lt;script src="{{.TrackerURL}}/tracker.js" async&gt;&lt;/script&gt;</code>
+                <code>&lt;script src="{{.TrackerURL}}/tracker.js" async data-endpoint="{{.TrackerURL}}" &gt;&lt;/script&gt;</code>
             </div>
             <p style="color: var(--text-muted); font-size: 0.85rem;">
                 Make sure to register your domain in the Pocketbase admin first.
