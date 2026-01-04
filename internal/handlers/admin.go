@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/models"
 )
 
@@ -79,7 +78,9 @@ func (h *Handlers) HandleDashboard(c echo.Context) error {
 		TrackerURL: GetPublicURL(c),
 	}
 
-	// Get pageview counts for each site
+	today := time.Now().UTC().Truncate(24 * time.Hour).Format("2006-01-02 15:04:05")
+
+	// Get pageview counts for each site using SQL aggregation
 	for _, site := range sites {
 		summary := SiteSummary{
 			ID:     site.Id,
@@ -88,18 +89,28 @@ func (h *Handlers) HandleDashboard(c echo.Context) error {
 		}
 
 		// Count total pageviews for this site
-		pageviews, err := h.app.Dao().FindRecordsByExpr("pageviews", dbx.HashExp{"site": site.Id})
+		var totalCount struct {
+			Count int `db:"count"`
+		}
+		err := h.app.Dao().DB().
+			NewQuery("SELECT COUNT(*) as count FROM pageviews WHERE site = {:siteId}").
+			Bind(map[string]any{"siteId": site.Id}).
+			One(&totalCount)
 		if err == nil {
-			summary.Pageviews = len(pageviews)
-			data.TotalPageviews += len(pageviews)
+			summary.Pageviews = totalCount.Count
+			data.TotalPageviews += totalCount.Count
+		}
 
-			// Count today's views
-			today := time.Now().Truncate(24 * time.Hour)
-			for _, pv := range pageviews {
-				if pv.Created.Time().After(today) {
-					summary.TodayViews++
-				}
-			}
+		// Count today's pageviews
+		var todayCount struct {
+			Count int `db:"count"`
+		}
+		err = h.app.Dao().DB().
+			NewQuery("SELECT COUNT(*) as count FROM pageviews WHERE site = {:siteId} AND created >= {:today}").
+			Bind(map[string]any{"siteId": site.Id, "today": today}).
+			One(&todayCount)
+		if err == nil {
+			summary.TodayViews = todayCount.Count
 		}
 
 		data.Sites = append(data.Sites, summary)
@@ -125,72 +136,120 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 		})
 	}
 
-	// Get all pageviews for this site
-	pageviews, err := h.app.Dao().FindRecordsByExpr("pageviews", dbx.HashExp{"site": siteId})
-	if err != nil {
-		pageviews = []*models.Record{}
-	}
-
 	data := SiteStatsData{
 		Site: SiteSummary{
 			ID:     site.Id,
 			Name:   site.GetString("name"),
 			Domain: site.GetString("domain"),
 		},
-		TotalViews: len(pageviews),
 		TrackerURL: GetPublicURL(c),
 	}
 
-	// Calculate stats
-	pageCounts := make(map[string]int)
-	referrerCounts := make(map[string]int)
-	dailyCounts := make(map[string]int)
-	uniqueIPs := make(map[string]bool)
-	today := time.Now().Truncate(24 * time.Hour)
+	today := time.Now().UTC().Truncate(24 * time.Hour).Format("2006-01-02 15:04:05")
 
-	for _, pv := range pageviews {
-		path := pv.GetString("path")
-		referrer := pv.GetString("referrer")
-		created := pv.Created.Time()
-		ipHash := pv.GetString("ip_hash")
+	// Get total pageview count
+	var totalCount struct {
+		Count int `db:"count"`
+	}
+	err = h.app.Dao().DB().
+		NewQuery("SELECT COUNT(*) as count FROM pageviews WHERE site = {:siteId}").
+		Bind(map[string]any{"siteId": siteId}).
+		One(&totalCount)
+	if err == nil {
+		data.TotalViews = totalCount.Count
+	}
 
-		pageCounts[path]++
+	// Get today's pageview count
+	var todayCount struct {
+		Count int `db:"count"`
+	}
+	err = h.app.Dao().DB().
+		NewQuery("SELECT COUNT(*) as count FROM pageviews WHERE site = {:siteId} AND created >= {:today}").
+		Bind(map[string]any{"siteId": siteId, "today": today}).
+		One(&todayCount)
+	if err == nil {
+		data.TodayViews = todayCount.Count
+	}
 
-		if referrer != "" {
-			referrerCounts[referrer]++
-		}
+	// Get unique visitors count
+	var uniqueCount struct {
+		Count int `db:"count"`
+	}
+	err = h.app.Dao().DB().
+		NewQuery("SELECT COUNT(DISTINCT ip_hash) as count FROM pageviews WHERE site = {:siteId} AND ip_hash != ''").
+		Bind(map[string]any{"siteId": siteId}).
+		One(&uniqueCount)
+	if err == nil {
+		data.UniqueVisitors = uniqueCount.Count
+	}
 
-		dateStr := created.Format("2006-01-02")
-		dailyCounts[dateStr]++
-
-		if ipHash != "" {
-			uniqueIPs[ipHash] = true
-		}
-
-		if created.After(today) {
-			data.TodayViews++
+	// Get top pages
+	var topPages []struct {
+		Path  string `db:"path"`
+		Views int    `db:"views"`
+	}
+	err = h.app.Dao().DB().
+		NewQuery("SELECT path, COUNT(*) as views FROM pageviews WHERE site = {:siteId} GROUP BY path ORDER BY views DESC LIMIT 10").
+		Bind(map[string]any{"siteId": siteId}).
+		All(&topPages)
+	if err == nil {
+		data.TopPages = make([]PageStats, len(topPages))
+		for i, p := range topPages {
+			data.TopPages[i] = PageStats{Path: p.Path, Views: p.Views}
 		}
 	}
 
-	data.UniqueVisitors = len(uniqueIPs)
+	// Get top referrers (excluding empty)
+	var topReferrers []struct {
+		Referrer string `db:"referrer"`
+		Views    int    `db:"views"`
+	}
+	err = h.app.Dao().DB().
+		NewQuery("SELECT referrer, COUNT(*) as views FROM pageviews WHERE site = {:siteId} AND referrer != '' GROUP BY referrer ORDER BY views DESC LIMIT 10").
+		Bind(map[string]any{"siteId": siteId}).
+		All(&topReferrers)
+	if err == nil {
+		data.TopReferrers = make([]ReferrerStats, len(topReferrers))
+		for i, r := range topReferrers {
+			data.TopReferrers[i] = ReferrerStats{Referrer: r.Referrer, Views: r.Views}
+		}
+	}
 
-	// Convert to sorted slices (top 10)
-	data.TopPages = topN(pageCounts, 10)
-	data.TopReferrers = topNReferrers(referrerCounts, 10)
-	data.DailyStats = sortedDailyStats(dailyCounts, 30)
+	// Get daily stats (last 30 days)
+	var dailyStats []struct {
+		Date  string `db:"date"`
+		Views int    `db:"views"`
+	}
+	err = h.app.Dao().DB().
+		NewQuery("SELECT DATE(created) as date, COUNT(*) as views FROM pageviews WHERE site = {:siteId} GROUP BY DATE(created) ORDER BY date DESC LIMIT 30").
+		Bind(map[string]any{"siteId": siteId}).
+		All(&dailyStats)
+	if err == nil {
+		data.DailyStats = make([]DailyStats, len(dailyStats))
+		for i, d := range dailyStats {
+			data.DailyStats[i] = DailyStats{Date: d.Date, Views: d.Views}
+		}
+	}
 
-	// Get recent pageviews (last 20)
-	data.RecentViews = make([]PageviewRecord, 0, 20)
-	count := 0
-	for i := len(pageviews) - 1; i >= 0 && count < 20; i-- {
-		pv := pageviews[i]
-		data.RecentViews = append(data.RecentViews, PageviewRecord{
-			Path:      pv.GetString("path"),
-			Referrer:  pv.GetString("referrer"),
-			CreatedAt: pv.Created.Time(),
-			UserAgent: pv.GetString("user_agent"),
-		})
-		count++
+	// Get recent pageviews (last 20) - this is the only query that fetches actual records
+	recentPageviews, err := h.app.Dao().FindRecordsByFilter(
+		"pageviews",
+		"site = {:siteId}",
+		"-created",
+		20,
+		0,
+		map[string]any{"siteId": siteId},
+	)
+	if err == nil {
+		data.RecentViews = make([]PageviewRecord, len(recentPageviews))
+		for i, pv := range recentPageviews {
+			data.RecentViews[i] = PageviewRecord{
+				Path:      pv.GetString("path"),
+				Referrer:  pv.GetString("referrer"),
+				CreatedAt: pv.Created.Time(),
+				UserAgent: pv.GetString("user_agent"),
+			}
+		}
 	}
 
 	return h.renderTemplate(c, "site_stats.html", data)
@@ -200,69 +259,4 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 func (h *Handlers) renderTemplate(c echo.Context, name string, data any) error {
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpl.ExecuteTemplate(c.Response(), name, data)
-}
-
-// topN returns the top N pages by view count
-func topN(counts map[string]int, n int) []PageStats {
-	result := make([]PageStats, 0, len(counts))
-	for path, views := range counts {
-		result = append(result, PageStats{Path: path, Views: views})
-	}
-
-	// Simple bubble sort for small datasets
-	for i := 0; i < len(result); i++ {
-		for j := i + 1; j < len(result); j++ {
-			if result[j].Views > result[i].Views {
-				result[i], result[j] = result[j], result[i]
-			}
-		}
-	}
-
-	if len(result) > n {
-		result = result[:n]
-	}
-	return result
-}
-
-// topNReferrers returns the top N referrers by view count
-func topNReferrers(counts map[string]int, n int) []ReferrerStats {
-	result := make([]ReferrerStats, 0, len(counts))
-	for referrer, views := range counts {
-		result = append(result, ReferrerStats{Referrer: referrer, Views: views})
-	}
-
-	for i := 0; i < len(result); i++ {
-		for j := i + 1; j < len(result); j++ {
-			if result[j].Views > result[i].Views {
-				result[i], result[j] = result[j], result[i]
-			}
-		}
-	}
-
-	if len(result) > n {
-		result = result[:n]
-	}
-	return result
-}
-
-// sortedDailyStats returns daily stats sorted by date (last n days)
-func sortedDailyStats(counts map[string]int, n int) []DailyStats {
-	result := make([]DailyStats, 0, len(counts))
-	for date, views := range counts {
-		result = append(result, DailyStats{Date: date, Views: views})
-	}
-
-	// Sort by date descending
-	for i := 0; i < len(result); i++ {
-		for j := i + 1; j < len(result); j++ {
-			if result[j].Date > result[i].Date {
-				result[i], result[j] = result[j], result[i]
-			}
-		}
-	}
-
-	if len(result) > n {
-		result = result[:n]
-	}
-	return result
 }
