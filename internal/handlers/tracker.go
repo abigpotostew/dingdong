@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/labstack/echo/v5"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 // trackerScript is the JavaScript tracker that gets embedded on client sites
@@ -86,28 +86,31 @@ const trackerScript = `(function() {
 })();`
 
 // GetPublicURL returns the public URL for the application
-// It checks the PUBLIC_URL environment variable first, then falls back to request-based detection
-func GetPublicURL(c echo.Context) string {
-	// Check environment variable first
+func GetPublicURL(e *core.RequestEvent) string {
 	if publicURL := os.Getenv("PUBLIC_URL"); publicURL != "" {
-		// Remove trailing slash if present
-		println("GetPublicURL using environment variable: ", publicURL)
 		return strings.TrimSuffix(publicURL, "/")
 	}
 
-	panic("PUBLIC_URL is not set")
-
+	scheme := "https"
+	if e.Request.TLS == nil {
+		forwardedProto := e.Request.Header.Get("X-Forwarded-Proto")
+		if forwardedProto != "" {
+			scheme = forwardedProto
+		} else {
+			scheme = "http"
+		}
+	}
+	return scheme + "://" + e.Request.Host
 }
 
 // HandleTrackerScript serves the JavaScript tracker with the correct endpoint
-func (h *Handlers) HandleTrackerScript(c echo.Context) error {
-	endpoint := GetPublicURL(c)
-
-	// Replace the placeholder with the actual endpoint
+func (h *Handlers) HandleTrackerScript(e *core.RequestEvent) error {
+	endpoint := GetPublicURL(e)
 	script := strings.ReplaceAll(trackerScript, "{{ENDPOINT}}", endpoint)
 
-	c.Response().Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
+	e.Response.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	e.Response.Header().Set("Cache-Control", "public, max-age=86400")
 
-	return c.String(200, script)
+	_, err := e.Response.Write([]byte(script))
+	return err
 }

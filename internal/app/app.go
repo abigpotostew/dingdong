@@ -11,7 +11,6 @@ import (
 	"github.com/abigpotostew/dingdong/internal/handlers"
 	"github.com/abigpotostew/dingdong/internal/migrations"
 
-	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -29,35 +28,47 @@ func Run() error {
 		return err
 	}
 
-	println("PUBLIC_URL is: ", os.Getenv("PUBLIC_URL"))
-
 	// Register migrations for database schema
 	migrations.Register(app)
 
-	// Setup routes before serving
-	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+	// Setup routes
+	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		// Create handlers
 		h := handlers.New(app, tmpl)
 
-		// Add custom CORS middleware for /api/ping using Pre() to run BEFORE Pocketbase's CORS
-		e.Router.Pre(pingCORSMiddleware(app))
+		// PING API endpoint with custom CORS handling
+		e.Router.POST("/api/ping", func(re *core.RequestEvent) error {
+			if err := handlePingCORS(app, re); err != nil {
+				return err
+			}
+			return h.HandlePing(re)
+		})
 
-		// PING API endpoint - public with CORS validation
-		e.Router.POST("/api/ping", h.HandlePing)
+		e.Router.OPTIONS("/api/ping", func(re *core.RequestEvent) error {
+			return handlePingPreflight(app, re)
+		})
 
-		// Handle CORS preflight for ping endpoint (backup, Pre middleware should handle it)
-		e.Router.OPTIONS("/api/ping", h.HandlePingPreflight)
+		// Tracker script endpoint
+		e.Router.GET("/tracker.js", func(re *core.RequestEvent) error {
+			return h.HandleTrackerScript(re)
+		})
 
-		// Tracker script endpoint - serves JavaScript with proper content-type
-		e.Router.GET("/tracker.js", h.HandleTrackerScript)
-
-		// Admin portal routes - publicly readable stats view
-		e.Router.GET("/", h.HandleDashboard)
-		e.Router.GET("/sites", h.HandleSites)
-		e.Router.GET("/sites/:siteId", h.HandleSiteStats)
+		// Admin portal routes
+		e.Router.GET("/", func(re *core.RequestEvent) error {
+			return h.HandleDashboard(re)
+		})
+		e.Router.GET("/sites", func(re *core.RequestEvent) error {
+			return h.HandleSites(re)
+		})
+		e.Router.GET("/sites/{siteId}", func(re *core.RequestEvent) error {
+			return h.HandleSiteStats(re)
+		})
+		e.Router.GET("/admin", func(re *core.RequestEvent) error {
+			return h.HandleAdmin(re)
+		})
 
 		log.Println("DingDong server started")
-		return nil
+		return e.Next()
 	})
 
 	// Check if running with arguments, otherwise use default serve
@@ -69,54 +80,60 @@ func Run() error {
 	return app.Start()
 }
 
-// pingCORSMiddleware creates a middleware that handles CORS for the /api/ping endpoint
-// Using Pre() ensures this runs BEFORE Pocketbase's default CORS middleware
-func pingCORSMiddleware(app *pocketbase.PocketBase) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			path := c.Request().URL.Path
-
-			// Only handle /api/ping endpoint
-			if path != "/api/ping" {
-				return next(c)
-			}
-
-			origin := c.Request().Header.Get("Origin")
-			if origin == "" {
-				return next(c)
-			}
-
-			// Validate the origin against registered domains
-			parsedOrigin, err := url.Parse(origin)
-			if err != nil {
-				return next(c)
-			}
-
-			domain := handlers.ExtractDomain(parsedOrigin.Host)
-
-			// Check if domain is registered (checks primary domain and additional_domains)
-			_, err = handlers.FindSiteByDomain(app, domain)
-			if err != nil {
-				// Domain not registered - don't set CORS headers, browser will block
-				if c.Request().Method == http.MethodOptions {
-					return c.NoContent(http.StatusForbidden)
-				}
-				return next(c)
-			}
-
-			// Set CORS headers for allowed origin (not wildcard!)
-			c.Response().Header().Set("Access-Control-Allow-Origin", origin)
-			c.Response().Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			c.Response().Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			c.Response().Header().Set("Access-Control-Max-Age", "86400")
-
-			// For OPTIONS preflight, respond immediately and don't continue
-			// This prevents Pocketbase's CORS from overriding our headers
-			if c.Request().Method == http.MethodOptions {
-				return c.NoContent(http.StatusNoContent)
-			}
-
-			return next(c)
-		}
+// handlePingCORS sets CORS headers for POST requests to /api/ping
+func handlePingCORS(app *pocketbase.PocketBase, e *core.RequestEvent) error {
+	origin := e.Request.Header.Get("Origin")
+	if origin == "" {
+		return nil
 	}
+
+	parsedOrigin, err := url.Parse(origin)
+	if err != nil {
+		return nil
+	}
+
+	domain := handlers.ExtractDomain(parsedOrigin.Host)
+
+	// Check if domain is registered
+	_, err = handlers.FindSiteByDomain(app, domain)
+	if err != nil {
+		return nil // Let the handler deal with unregistered domains
+	}
+
+	// Set CORS headers
+	e.Response.Header().Set("Access-Control-Allow-Origin", origin)
+	e.Response.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	e.Response.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	e.Response.Header().Set("Access-Control-Max-Age", "86400")
+
+	return nil
+}
+
+// handlePingPreflight handles CORS preflight requests for /api/ping
+func handlePingPreflight(app *pocketbase.PocketBase, e *core.RequestEvent) error {
+	origin := e.Request.Header.Get("Origin")
+	if origin == "" {
+		return e.NoContent(http.StatusNoContent)
+	}
+
+	parsedOrigin, err := url.Parse(origin)
+	if err != nil {
+		return e.NoContent(http.StatusNoContent)
+	}
+
+	domain := handlers.ExtractDomain(parsedOrigin.Host)
+
+	// Check if domain is registered
+	_, err = handlers.FindSiteByDomain(app, domain)
+	if err != nil {
+		return e.NoContent(http.StatusForbidden)
+	}
+
+	// Set CORS headers
+	e.Response.Header().Set("Access-Control-Allow-Origin", origin)
+	e.Response.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	e.Response.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	e.Response.Header().Set("Access-Control-Max-Age", "86400")
+
+	return e.NoContent(http.StatusNoContent)
 }

@@ -4,8 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 // DashboardData contains data for the main dashboard view
@@ -65,22 +64,20 @@ type PageviewRecord struct {
 }
 
 // HandleDashboard renders the main dashboard showing all sites
-func (h *Handlers) HandleDashboard(c echo.Context) error {
-	// Get all sites
-	sites, err := h.app.Dao().FindRecordsByFilter("sites", "1=1", "-created", 100, 0)
+func (h *Handlers) HandleDashboard(e *core.RequestEvent) error {
+	sites, err := h.app.FindRecordsByFilter("sites", "1=1", "-created", 100, 0)
 	if err != nil {
-		sites = []*models.Record{}
+		sites = []*core.Record{}
 	}
 
 	data := DashboardData{
 		Sites:      make([]SiteSummary, 0, len(sites)),
 		TotalSites: len(sites),
-		TrackerURL: GetPublicURL(c),
+		TrackerURL: GetPublicURL(e),
 	}
 
 	today := time.Now().UTC().Truncate(24 * time.Hour).Format("2006-01-02 15:04:05")
 
-	// Get pageview counts for each site using SQL aggregation
 	for _, site := range sites {
 		summary := SiteSummary{
 			ID:     site.Id,
@@ -88,11 +85,10 @@ func (h *Handlers) HandleDashboard(c echo.Context) error {
 			Domain: site.GetString("domain"),
 		}
 
-		// Count total pageviews for this site
 		var totalCount struct {
 			Count int `db:"count"`
 		}
-		err := h.app.Dao().DB().
+		err := h.app.DB().
 			NewQuery("SELECT COUNT(*) as count FROM pageviews WHERE site = {:siteId}").
 			Bind(map[string]any{"siteId": site.Id}).
 			One(&totalCount)
@@ -101,11 +97,10 @@ func (h *Handlers) HandleDashboard(c echo.Context) error {
 			data.TotalPageviews += totalCount.Count
 		}
 
-		// Count today's pageviews
 		var todayCount struct {
 			Count int `db:"count"`
 		}
-		err = h.app.Dao().DB().
+		err = h.app.DB().
 			NewQuery("SELECT COUNT(*) as count FROM pageviews WHERE site = {:siteId} AND created >= {:today}").
 			Bind(map[string]any{"siteId": site.Id, "today": today}).
 			One(&todayCount)
@@ -116,22 +111,21 @@ func (h *Handlers) HandleDashboard(c echo.Context) error {
 		data.Sites = append(data.Sites, summary)
 	}
 
-	return h.renderTemplate(c, "dashboard.html", data)
+	return h.renderTemplate(e, "dashboard.html", data)
 }
 
 // HandleSites renders the sites list page
-func (h *Handlers) HandleSites(c echo.Context) error {
-	return h.HandleDashboard(c)
+func (h *Handlers) HandleSites(e *core.RequestEvent) error {
+	return h.HandleDashboard(e)
 }
 
 // HandleSiteStats renders detailed stats for a specific site
-func (h *Handlers) HandleSiteStats(c echo.Context) error {
-	siteId := c.PathParam("siteId")
+func (h *Handlers) HandleSiteStats(e *core.RequestEvent) error {
+	siteId := e.Request.PathValue("siteId")
 
-	// Get the site
-	site, err := h.app.Dao().FindRecordById("sites", siteId)
+	site, err := h.app.FindRecordById("sites", siteId)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{
+		return e.JSON(http.StatusNotFound, map[string]string{
 			"error": "Site not found",
 		})
 	}
@@ -142,16 +136,15 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 			Name:   site.GetString("name"),
 			Domain: site.GetString("domain"),
 		},
-		TrackerURL: GetPublicURL(c),
+		TrackerURL: GetPublicURL(e),
 	}
 
 	today := time.Now().UTC().Truncate(24 * time.Hour).Format("2006-01-02 15:04:05")
 
-	// Get total pageview count
 	var totalCount struct {
 		Count int `db:"count"`
 	}
-	err = h.app.Dao().DB().
+	err = h.app.DB().
 		NewQuery("SELECT COUNT(*) as count FROM pageviews WHERE site = {:siteId}").
 		Bind(map[string]any{"siteId": siteId}).
 		One(&totalCount)
@@ -159,11 +152,10 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 		data.TotalViews = totalCount.Count
 	}
 
-	// Get today's pageview count
 	var todayCount struct {
 		Count int `db:"count"`
 	}
-	err = h.app.Dao().DB().
+	err = h.app.DB().
 		NewQuery("SELECT COUNT(*) as count FROM pageviews WHERE site = {:siteId} AND created >= {:today}").
 		Bind(map[string]any{"siteId": siteId, "today": today}).
 		One(&todayCount)
@@ -171,11 +163,10 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 		data.TodayViews = todayCount.Count
 	}
 
-	// Get unique visitors count
 	var uniqueCount struct {
 		Count int `db:"count"`
 	}
-	err = h.app.Dao().DB().
+	err = h.app.DB().
 		NewQuery("SELECT COUNT(DISTINCT ip_hash) as count FROM pageviews WHERE site = {:siteId} AND ip_hash != ''").
 		Bind(map[string]any{"siteId": siteId}).
 		One(&uniqueCount)
@@ -183,12 +174,11 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 		data.UniqueVisitors = uniqueCount.Count
 	}
 
-	// Get top pages
 	var topPages []struct {
 		Path  string `db:"path"`
 		Views int    `db:"views"`
 	}
-	err = h.app.Dao().DB().
+	err = h.app.DB().
 		NewQuery("SELECT path, COUNT(*) as views FROM pageviews WHERE site = {:siteId} GROUP BY path ORDER BY views DESC LIMIT 10").
 		Bind(map[string]any{"siteId": siteId}).
 		All(&topPages)
@@ -199,12 +189,11 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 		}
 	}
 
-	// Get top referrers (excluding empty)
 	var topReferrers []struct {
 		Referrer string `db:"referrer"`
 		Views    int    `db:"views"`
 	}
-	err = h.app.Dao().DB().
+	err = h.app.DB().
 		NewQuery("SELECT referrer, COUNT(*) as views FROM pageviews WHERE site = {:siteId} AND referrer != '' GROUP BY referrer ORDER BY views DESC LIMIT 10").
 		Bind(map[string]any{"siteId": siteId}).
 		All(&topReferrers)
@@ -215,12 +204,11 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 		}
 	}
 
-	// Get daily stats (last 30 days)
 	var dailyStats []struct {
 		Date  string `db:"date"`
 		Views int    `db:"views"`
 	}
-	err = h.app.Dao().DB().
+	err = h.app.DB().
 		NewQuery("SELECT DATE(created) as date, COUNT(*) as views FROM pageviews WHERE site = {:siteId} GROUP BY DATE(created) ORDER BY date DESC LIMIT 30").
 		Bind(map[string]any{"siteId": siteId}).
 		All(&dailyStats)
@@ -231,8 +219,7 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 		}
 	}
 
-	// Get recent pageviews (last 20) - this is the only query that fetches actual records
-	recentPageviews, err := h.app.Dao().FindRecordsByFilter(
+	recentPageviews, err := h.app.FindRecordsByFilter(
 		"pageviews",
 		"site = {:siteId}",
 		"-created",
@@ -246,17 +233,22 @@ func (h *Handlers) HandleSiteStats(c echo.Context) error {
 			data.RecentViews[i] = PageviewRecord{
 				Path:      pv.GetString("path"),
 				Referrer:  pv.GetString("referrer"),
-				CreatedAt: pv.Created.Time(),
+				CreatedAt: pv.GetDateTime("created").Time(),
 				UserAgent: pv.GetString("user_agent"),
 			}
 		}
 	}
 
-	return h.renderTemplate(c, "site_stats.html", data)
+	return h.renderTemplate(e, "site_stats.html", data)
+}
+
+// HandleAdmin renders the admin management page
+func (h *Handlers) HandleAdmin(e *core.RequestEvent) error {
+	return h.renderTemplate(e, "admin.html", nil)
 }
 
 // renderTemplate renders an HTML template
-func (h *Handlers) renderTemplate(c echo.Context, name string, data any) error {
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpl.ExecuteTemplate(c.Response(), name, data)
+func (h *Handlers) renderTemplate(e *core.RequestEvent, name string, data any) error {
+	e.Response.Header().Set("Content-Type", "text/html; charset=utf-8")
+	return h.tmpl.ExecuteTemplate(e.Response, name, data)
 }

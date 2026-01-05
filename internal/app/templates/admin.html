@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | DingDong</title>
+    <script src="https://cdn.jsdelivr.net/npm/pocketbase@0.26.5/dist/pocketbase.umd.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --border-color: #2a2a3a;
+            --text-primary: #e8e8f0;
+            --text-secondary: #9090a8;
+            --text-muted: #606078;
+            --accent-primary: #7c3aed;
+            --accent-secondary: #a855f7;
+            --accent-glow: rgba(124, 58, 237, 0.3);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+        header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo::before { content: '📊'; -webkit-text-fill-color: initial; }
+
+        nav { display: flex; gap: 1.5rem; align-items: center; }
+
+        nav a, nav button {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        nav a:hover, nav button:hover { color: var(--text-primary); background: var(--bg-card); }
+
+        h1, h2, h3 { font-weight: 600; letter-spacing: -0.02em; }
+        h1 { font-size: 2rem; margin-bottom: 1.5rem; }
+        h2 { font-size: 1.25rem; margin-bottom: 1rem; color: var(--text-secondary); }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { border-color: var(--accent-primary); color: var(--text-primary); }
+        .tab.active { background: var(--accent-primary); border-color: var(--accent-primary); color: white; }
+
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.85rem; }
+
+        input, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        input:focus, textarea:focus { outline: none; border-color: var(--accent-primary); }
+
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; }
+        .checkbox-group input { width: auto; }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--accent-primary); color: white; }
+        .btn-primary:hover { background: var(--accent-secondary); }
+        .btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { border-color: var(--accent-primary); }
+        .btn-danger { background: var(--error); color: white; }
+        .btn-danger:hover { opacity: 0.8; }
+        .btn-sm { padding: 0.5rem 1rem; font-size: 0.8rem; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--text-muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; }
+        tr:hover td { background: var(--bg-secondary); }
+
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+
+        .hidden { display: none !important; }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .alert-error { background: rgba(239, 68, 68, 0.2); color: var(--error); border: 1px solid var(--error); }
+        .alert-success { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success); }
+
+        .login-container {
+            max-width: 400px;
+            margin: 4rem auto;
+        }
+
+        .actions { display: flex; gap: 0.5rem; }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal h2 { margin-bottom: 1.5rem; }
+        .modal-actions { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem; }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 4rem;
+        }
+
+        code {
+            background: var(--bg-primary);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .truncate {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <a href="/" class="logo">DingDong</a>
+            <nav>
+                <a href="/">Dashboard</a>
+                <a href="/_/">PocketBase Admin</a>
+                <button id="logoutBtn" class="hidden" onclick="logout()">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Login Section -->
+    <div id="loginSection" class="container">
+        <div class="login-container">
+            <div class="card">
+                <h2>Admin Login</h2>
+                <div id="loginError" class="alert alert-error hidden"></div>
+                <form id="loginForm" onsubmit="login(event)">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" required placeholder="admin@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Section -->
+    <main id="adminSection" class="container hidden">
+        <h1>Site Management</h1>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('sites')">Sites</button>
+            <button class="tab" onclick="showTab('pageviews')">Pageviews</button>
+        </div>
+
+        <!-- Sites Tab -->
+        <div id="sitesTab">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 style="margin: 0;">Registered Sites</h2>
+                    <button class="btn btn-primary" onclick="showAddSiteModal()">+ Add Site</button>
+                </div>
+                <div id="sitesAlert" class="alert hidden"></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Domain</th>
+                            <th>Additional Domains</th>
+                            <th>Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sitesTableBody">
+                        <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pageviews Tab -->
+        <div id="pageviewsTab" class="hidden">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 style="margin: 0;">Pageviews</h2>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <select id="siteFilter" onchange="loadPageviews(1)" style="padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <option value="">All Sites</option>
+                        </select>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Site</th>
+                            <th>Path</th>
+                            <th>Referrer</th>
+                            <th>IP Hash</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pageviewsTableBody">
+                        <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading...</td></tr>
+                    </tbody>
+                </table>
+                <div id="pageviewsPagination" class="pagination"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add/Edit Site Modal -->
+    <div id="siteModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h2 id="siteModalTitle">Add Site</h2>
+            <form id="siteForm" onsubmit="saveSite(event)">
+                <input type="hidden" id="siteId">
+                <div class="form-group">
+                    <label for="siteName">Name</label>
+                    <input type="text" id="siteName" required placeholder="My Website">
+                </div>
+                <div class="form-group">
+                    <label for="siteDomain">Primary Domain</label>
+                    <input type="text" id="siteDomain" required placeholder="example.com">
+                </div>
+                <div class="form-group">
+                    <label for="siteAdditionalDomains">Additional Domains (comma-separated)</label>
+                    <input type="text" id="siteAdditionalDomains" placeholder="www.example.com, blog.example.com">
+                </div>
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="siteActive" checked>
+                        <label for="siteActive" style="margin: 0;">Active</label>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeSiteModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>Delete Site</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Are you sure you want to delete this site? This will also delete all associated pageviews.</p>
+            <input type="hidden" id="deleteId">
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>DingDong — Privacy-friendly web analytics</p>
+    </footer>
+
+    <script>
+        const pb = new PocketBase(window.location.origin);
+        let sitesCache = {};
+
+        // Check if already logged in
+        if (pb.authStore.isValid && pb.authStore.isAdmin) {
+            showAdminSection();
+        }
+
+        async function login(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorEl = document.getElementById('loginError');
+
+            try {
+                await pb.admins.authWithPassword(email, password);
+                showAdminSection();
+            } catch (err) {
+                errorEl.textContent = err.message || 'Login failed';
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        function logout() {
+            pb.authStore.clear();
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('adminSection').classList.add('hidden');
+            document.getElementById('logoutBtn').classList.add('hidden');
+        }
+
+        function showAdminSection() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('adminSection').classList.remove('hidden');
+            document.getElementById('logoutBtn').classList.remove('hidden');
+            loadSites();
+            loadSiteFilter();
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.getElementById('sitesTab').classList.add('hidden');
+            document.getElementById('pageviewsTab').classList.add('hidden');
+            document.getElementById(tab + 'Tab').classList.remove('hidden');
+
+            if (tab === 'pageviews') {
+                loadPageviews(1);
+            }
+        }
+
+        // Sites Management
+        async function loadSites() {
+            try {
+                const records = await pb.collection('sites').getFullList({ sort: '-created' });
+                sitesCache = {};
+                records.forEach(r => sitesCache[r.id] = r);
+
+                const tbody = document.getElementById('sitesTableBody');
+                if (records.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No sites registered yet</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = records.map(site => `
+                    <tr>
+                        <td>${escapeHtml(site.name)}</td>
+                        <td><code>${escapeHtml(site.domain)}</code></td>
+                        <td class="truncate">${escapeHtml(site.additional_domains || '-')}</td>
+                        <td>${site.active ? '<span style="color: var(--success);">✓ Yes</span>' : '<span style="color: var(--text-muted);">No</span>'}</td>
+                        <td class="actions">
+                            <button class="btn btn-secondary btn-sm" onclick="editSite('${site.id}')">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${site.id}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load sites:', err);
+            }
+        }
+
+        async function loadSiteFilter() {
+            try {
+                const records = await pb.collection('sites').getFullList({ sort: 'name' });
+                const select = document.getElementById('siteFilter');
+                select.innerHTML = '<option value="">All Sites</option>' +
+                    records.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+            } catch (err) {
+                console.error('Failed to load site filter:', err);
+            }
+        }
+
+        function showAddSiteModal() {
+            document.getElementById('siteModalTitle').textContent = 'Add Site';
+            document.getElementById('siteId').value = '';
+            document.getElementById('siteName').value = '';
+            document.getElementById('siteDomain').value = '';
+            document.getElementById('siteAdditionalDomains').value = '';
+            document.getElementById('siteActive').checked = true;
+            document.getElementById('siteModal').classList.remove('hidden');
+        }
+
+        function editSite(id) {
+            const site = sitesCache[id];
+            if (!site) return;
+
+            document.getElementById('siteModalTitle').textContent = 'Edit Site';
+            document.getElementById('siteId').value = site.id;
+            document.getElementById('siteName').value = site.name;
+            document.getElementById('siteDomain').value = site.domain;
+            document.getElementById('siteAdditionalDomains').value = site.additional_domains || '';
+            document.getElementById('siteActive').checked = site.active;
+            document.getElementById('siteModal').classList.remove('hidden');
+        }
+
+        function closeSiteModal() {
+            document.getElementById('siteModal').classList.add('hidden');
+        }
+
+        async function saveSite(e) {
+            e.preventDefault();
+            const id = document.getElementById('siteId').value;
+            const data = {
+                name: document.getElementById('siteName').value,
+                domain: document.getElementById('siteDomain').value,
+                additional_domains: document.getElementById('siteAdditionalDomains').value,
+                active: document.getElementById('siteActive').checked
+            };
+
+            try {
+                if (id) {
+                    await pb.collection('sites').update(id, data);
+                } else {
+                    await pb.collection('sites').create(data);
+                }
+                closeSiteModal();
+                loadSites();
+                loadSiteFilter();
+                showAlert('sitesAlert', 'Site saved successfully!', 'success');
+            } catch (err) {
+                alert('Error: ' + (err.message || 'Failed to save site'));
+            }
+        }
+
+        function showDeleteModal(id) {
+            document.getElementById('deleteId').value = id;
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.add('hidden');
+        }
+
+        async function confirmDelete() {
+            const id = document.getElementById('deleteId').value;
+            try {
+                await pb.collection('sites').delete(id);
+                closeDeleteModal();
+                loadSites();
+                loadSiteFilter();
+                showAlert('sitesAlert', 'Site deleted successfully!', 'success');
+            } catch (err) {
+                alert('Error: ' + (err.message || 'Failed to delete site'));
+            }
+        }
+
+        // Pageviews
+        let currentPage = 1;
+        const perPage = 50;
+
+        async function loadPageviews(page) {
+            currentPage = page;
+            const siteFilter = document.getElementById('siteFilter').value;
+
+            try {
+                const filter = siteFilter ? `site = "${siteFilter}"` : '';
+                const result = await pb.collection('pageviews').getList(page, perPage, {
+                    sort: '-created',
+                    filter: filter,
+                    expand: 'site'
+                });
+
+                const tbody = document.getElementById('pageviewsTableBody');
+                if (result.items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No pageviews found</td></tr>';
+                } else {
+                    tbody.innerHTML = result.items.map(pv => `
+                        <tr>
+                            <td style="white-space: nowrap;">${new Date(pv.created).toLocaleString()}</td>
+                            <td>${pv.expand?.site?.name || 'Unknown'}</td>
+                            <td class="truncate"><code>${escapeHtml(pv.path)}</code></td>
+                            <td class="truncate">${pv.referrer ? escapeHtml(pv.referrer) : '<em style="color: var(--text-muted);">Direct</em>'}</td>
+                            <td><code style="font-size: 0.75rem;">${pv.ip_hash || '-'}</code></td>
+                        </tr>
+                    `).join('');
+                }
+
+                // Pagination
+                const totalPages = result.totalPages;
+                const paginationEl = document.getElementById('pageviewsPagination');
+                if (totalPages <= 1) {
+                    paginationEl.innerHTML = '';
+                } else {
+                    let html = '';
+                    if (page > 1) {
+                        html += `<button class="btn btn-secondary btn-sm" onclick="loadPageviews(${page - 1})">← Prev</button>`;
+                    }
+                    html += `<span style="padding: 0.5rem 1rem; color: var(--text-secondary);">Page ${page} of ${totalPages}</span>`;
+                    if (page < totalPages) {
+                        html += `<button class="btn btn-secondary btn-sm" onclick="loadPageviews(${page + 1})">Next →</button>`;
+                    }
+                    paginationEl.innerHTML = html;
+                }
+            } catch (err) {
+                console.error('Failed to load pageviews:', err);
+            }
+        }
+
+        function showAlert(id, message, type) {
+            const el = document.getElementById(id);
+            el.textContent = message;
+            el.className = `alert alert-${type}`;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 3000);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
+

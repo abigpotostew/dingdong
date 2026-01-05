@@ -164,6 +164,7 @@ environment:
 
 ```bash
 # Run in development mode
+export PUBLIC_URL=0.0.0.0:8090
 go run . serve --http=0.0.0.0:8090
 
 # Build for production

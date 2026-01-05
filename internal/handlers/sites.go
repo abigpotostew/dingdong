@@ -4,18 +4,18 @@ import (
 	"strings"
 
 	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 // FindSiteByDomain finds an active site that matches the given domain.
 // It checks the primary domain field first, then checks the additional_domains field.
 // The additional_domains field is a comma-separated list of additional domains/subdomains.
-func FindSiteByDomain(app *pocketbase.PocketBase, domain string) (*models.Record, error) {
+func FindSiteByDomain(app *pocketbase.PocketBase, domain string) (*core.Record, error) {
 	// Normalize the domain (lowercase, trim whitespace)
 	domain = strings.ToLower(strings.TrimSpace(domain))
 
 	// First, try to find by primary domain (exact match)
-	site, err := app.Dao().FindFirstRecordByFilter("sites", "domain = {:domain} && active = true", map[string]any{
+	site, err := app.FindFirstRecordByFilter("sites", "domain = {:domain} && active = true", map[string]any{
 		"domain": domain,
 	})
 	if err == nil {
@@ -23,7 +23,7 @@ func FindSiteByDomain(app *pocketbase.PocketBase, domain string) (*models.Record
 	}
 
 	// If not found by primary domain, search all active sites and check additional_domains
-	sites, err := app.Dao().FindRecordsByFilter("sites", "active = true", "-created", 1000, 0)
+	sites, err := app.FindRecordsByFilter("sites", "active = true", "-created", 1000, 0)
 	if err != nil {
 		return nil, err
 	}

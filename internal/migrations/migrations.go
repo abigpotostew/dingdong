@@ -3,15 +3,12 @@ package migrations
 import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/models"
-	"github.com/pocketbase/pocketbase/models/schema"
-	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 // Register sets up database migrations for the stats tracking schema
 func Register(app *pocketbase.PocketBase) {
 	// Create collections on app bootstrap
-	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		// Create sites collection (registered domains)
 		if err := createSitesCollection(app); err != nil {
 			return err
@@ -27,182 +24,146 @@ func Register(app *pocketbase.PocketBase) {
 			return err
 		}
 
-		return nil
+		return e.Next()
 	})
 }
 
 // createSitesCollection creates the sites collection for registered domains
 func createSitesCollection(app *pocketbase.PocketBase) error {
 	// Check if collection already exists
-	existing, _ := app.Dao().FindCollectionByNameOrId("sites")
+	existing, _ := app.FindCollectionByNameOrId("sites")
 	if existing != nil {
 		return nil
 	}
 
-	collection := &models.Collection{
-		Name:       "sites",
-		Type:       models.CollectionTypeBase,
-		ListRule:   types.Pointer(""),
-		ViewRule:   types.Pointer(""),
-		CreateRule: nil, // Only admin can create
-		UpdateRule: nil, // Only admin can update
-		DeleteRule: nil, // Only admin can delete
-		Schema: schema.NewSchema(
-			&schema.SchemaField{
-				Name:     "domain",
-				Type:     schema.FieldTypeText,
-				Required: true,
-				Options: &schema.TextOptions{
-					Min: types.Pointer(1),
-					Max: types.Pointer(255),
-				},
-			},
-			&schema.SchemaField{
-				Name:     "name",
-				Type:     schema.FieldTypeText,
-				Required: true,
-				Options: &schema.TextOptions{
-					Min: types.Pointer(1),
-					Max: types.Pointer(255),
-				},
-			},
-			&schema.SchemaField{
-				Name:     "active",
-				Type:     schema.FieldTypeBool,
-				Required: false,
-			},
-			&schema.SchemaField{
-				Name:     "additional_domains",
-				Type:     schema.FieldTypeText,
-				Required: false,
-				Options: &schema.TextOptions{
-					Max: types.Pointer(1024),
-				},
-			},
-		),
-		Indexes: types.JsonArray[string]{
-			"CREATE INDEX idx_sites_domain ON sites (domain)",
-		},
-	}
+	collection := core.NewBaseCollection("sites")
 
-	return app.Dao().SaveCollection(collection)
+	// Set rules - empty string means public access, nil means admin only
+	collection.ListRule = nil
+	collection.ViewRule = nil
+	collection.CreateRule = nil
+	collection.UpdateRule = nil
+	collection.DeleteRule = nil
+
+	// Add fields
+	collection.Fields.Add(&core.TextField{
+		Name:     "domain",
+		Required: true,
+		Max:      255,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name:     "name",
+		Required: true,
+		Max:      255,
+	})
+
+	collection.Fields.Add(&core.BoolField{
+		Name: "active",
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "additional_domains",
+		Max:  1024,
+	})
+
+	// Add index
+	collection.AddIndex("idx_sites_domain", false, "domain", "")
+
+	return app.Save(collection)
 }
 
 // migrateSitesCollection adds new fields to existing sites collection
 func migrateSitesCollection(app *pocketbase.PocketBase) error {
-	collection, err := app.Dao().FindCollectionByNameOrId("sites")
+	collection, err := app.FindCollectionByNameOrId("sites")
 	if err != nil {
 		return nil // Collection doesn't exist, nothing to migrate
 	}
 
 	// Check if additional_domains field already exists
-	if collection.Schema.GetFieldByName("additional_domains") != nil {
+	if collection.Fields.GetByName("additional_domains") != nil {
 		return nil // Already migrated
 	}
 
 	// Add the additional_domains field
-	collection.Schema.AddField(&schema.SchemaField{
-		Name:     "additional_domains",
-		Type:     schema.FieldTypeText,
-		Required: false,
-		Options: &schema.TextOptions{
-			Max: types.Pointer(1024),
-		},
+	collection.Fields.Add(&core.TextField{
+		Name: "additional_domains",
+		Max:  1024,
 	})
 
-	return app.Dao().SaveCollection(collection)
+	return app.Save(collection)
 }
 
 // createPageviewsCollection creates the pageviews collection for analytics
 func createPageviewsCollection(app *pocketbase.PocketBase) error {
 	// Check if collection already exists
-	existing, _ := app.Dao().FindCollectionByNameOrId("pageviews")
+	existing, _ := app.FindCollectionByNameOrId("pageviews")
 	if existing != nil {
 		return nil
 	}
 
 	// Look up the sites collection to get its ID
-	sitesCollection, err := app.Dao().FindCollectionByNameOrId("sites")
+	sitesCollection, err := app.FindCollectionByNameOrId("sites")
 	if err != nil {
 		return err
 	}
 
-	collection := &models.Collection{
-		Name:       "pageviews",
-		Type:       models.CollectionTypeBase,
-		ListRule:   types.Pointer(""),
-		ViewRule:   types.Pointer(""),
-		CreateRule: types.Pointer(""), // Public can create (via API)
-		UpdateRule: nil,               // No updates
-		DeleteRule: nil,               // Only admin can delete
-		Schema: schema.NewSchema(
-			&schema.SchemaField{
-				Name:     "site",
-				Type:     schema.FieldTypeRelation,
-				Required: true,
-				Options: &schema.RelationOptions{
-					CollectionId:  sitesCollection.Id,
-					MaxSelect:     types.Pointer(1),
-					CascadeDelete: true,
-				},
-			},
-			&schema.SchemaField{
-				Name:     "path",
-				Type:     schema.FieldTypeText,
-				Required: true,
-				Options: &schema.TextOptions{
-					Max: types.Pointer(2048),
-				},
-			},
-			&schema.SchemaField{
-				Name:     "referrer",
-				Type:     schema.FieldTypeText,
-				Required: false,
-				Options: &schema.TextOptions{
-					Max: types.Pointer(2048),
-				},
-			},
-			&schema.SchemaField{
-				Name:     "user_agent",
-				Type:     schema.FieldTypeText,
-				Required: false,
-				Options: &schema.TextOptions{
-					Max: types.Pointer(1024),
-				},
-			},
-			&schema.SchemaField{
-				Name:     "ip_hash",
-				Type:     schema.FieldTypeText,
-				Required: false,
-				Options: &schema.TextOptions{
-					Max: types.Pointer(64),
-				},
-			},
-			&schema.SchemaField{
-				Name:     "country",
-				Type:     schema.FieldTypeText,
-				Required: false,
-				Options: &schema.TextOptions{
-					Max: types.Pointer(64),
-				},
-			},
-			&schema.SchemaField{
-				Name:     "screen_width",
-				Type:     schema.FieldTypeNumber,
-				Required: false,
-			},
-			&schema.SchemaField{
-				Name:     "screen_height",
-				Type:     schema.FieldTypeNumber,
-				Required: false,
-			},
-		),
-		Indexes: types.JsonArray[string]{
-			"CREATE INDEX idx_pageviews_site ON pageviews (site)",
-			"CREATE INDEX idx_pageviews_created ON pageviews (created)",
-			"CREATE INDEX idx_pageviews_path ON pageviews (path)",
-		},
-	}
+	collection := core.NewBaseCollection("pageviews")
 
-	return app.Dao().SaveCollection(collection)
+	// Set rules
+	collection.ListRule = nil
+	collection.ViewRule = nil
+	collection.CreateRule = nil
+	collection.UpdateRule = nil
+	collection.DeleteRule = nil
+
+	// Add fields
+	collection.Fields.Add(&core.RelationField{
+		Name:          "site",
+		Required:      true,
+		CollectionId:  sitesCollection.Id,
+		MaxSelect:     1,
+		CascadeDelete: true,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name:     "path",
+		Required: true,
+		Max:      2048,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "referrer",
+		Max:  2048,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "user_agent",
+		Max:  1024,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "ip_hash",
+		Max:  64,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "country",
+		Max:  64,
+	})
+
+	collection.Fields.Add(&core.NumberField{
+		Name: "screen_width",
+	})
+
+	collection.Fields.Add(&core.NumberField{
+		Name: "screen_height",
+	})
+
+	// Add indexes
+	collection.AddIndex("idx_pageviews_site", false, "site", "")
+	collection.AddIndex("idx_pageviews_created", false, "created", "")
+	collection.AddIndex("idx_pageviews_path", false, "path", "")
+
+	return app.Save(collection)
 }
