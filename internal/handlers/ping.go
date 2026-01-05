@@ -80,7 +80,12 @@ func (h *Handlers) HandlePing(e *core.RequestEvent) error {
 		})
 	}
 
-	setCORSHeaders(e, origin)
+	if site == nil {
+		log.Printf("[ping] Site not found: %s\n", domain)
+		return e.JSON(http.StatusNotFound, map[string]string{
+			"error": "not found",
+		})
+	}
 
 	body, err := io.ReadAll(e.Request.Body)
 	if err != nil {

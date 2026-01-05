@@ -1,6 +1,6 @@
 # DingDong
 
-A privacy-friendly web analytics tracker built with Go and Pocketbase.
+A privacy-friendly web analytics tracker using sqlite with an easily deployable single executable. Suitable for small sites.
 
 ## Features
 
@@ -44,7 +44,7 @@ go mod download
 go run . serve --http=0.0.0.0:8090
 ```
 
-## Setup
+## Usage
 
 ### 1. Create Admin Account
 
@@ -74,7 +74,7 @@ Replace `stats.example.com` with your actual DingDong server URL.
 You can override the tracking endpoint using a `data-endpoint` attribute:
 
 ```html
-<script src="https://stats.example.com/tracker.js" data-endpoint="https://custom.example.com" async></script>
+<script src="https://stats.example.com/tracker.js" data-endpoint="https://my-custom-stats.example.com" async></script>
 ```
 
 This is useful when serving the tracker script from a CDN or different domain than the API.
@@ -110,6 +110,7 @@ dingdong/
 | `/api/ping` | POST | Receive pageview data |
 | `/tracker.js` | GET | JavaScript tracker script |
 | `/_/` | GET | Pocketbase admin UI |
+| `/admin` | GET | Setup your analytics |
 
 ## Database Schema
 
@@ -179,6 +180,10 @@ DingDong is designed with privacy in mind:
 - **IP Hashing**: IP addresses are hashed before storage
 - **No Personal Data**: No personally identifiable information is collected
 - **Self-Hosted**: Your data stays on your server
+
+## Features to work on
+- Periodic data archiving. Right now all page view data is stored forever. To save on storage space over time, the backend should periodically generate a report and then delete or compress the data.
+
 
 ## License
 

@@ -162,7 +162,7 @@
             margin-top: 4rem;
         }
     </style>
-    <!-- <script src="/tracker.js" data-endpoint="/" async></script> -->
+    <script src="/tracker.js" data-endpoint="/" async></script>
 
 
 </head>
@@ -173,7 +173,6 @@
             <nav>
                 <a href="/">Dashboard</a>
                 <a href="/admin">Manage</a>
-                <a href="/_/">PocketBase</a>
             </nav>
         </div>
     </header>
@@ -218,7 +217,8 @@
         {{else}}
         <div class="card empty-state">
             <h3>No sites registered yet</h3>
-            <p>Add a site through the <a href="/_/" class="site-link">Pocketbase Admin</a> to get started.</p>
+            <p>Add a site through the admin portal to get started.</p>
+            <a href="/admin" class="site-link">Admin Portal</a>
         </div>
         {{end}}
 
@@ -229,7 +229,7 @@
                 <code>&lt;script src="{{.TrackerURL}}/tracker.js" async data-endpoint="{{.TrackerURL}}" &gt;&lt;/script&gt;</code>
             </div>
             <p style="color: var(--text-muted); font-size: 0.85rem;">
-                Make sure to register your domain in the Pocketbase admin first.
+                Make sure to register your domain in the admin portal first.
             </p>
         </div>
     </main>

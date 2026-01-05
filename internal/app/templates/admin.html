@@ -233,6 +233,7 @@
             white-space: nowrap;
         }
     </style>
+    <script src="/tracker.js" data-endpoint="/" async></script>
 </head>
 <body>
     <header>
@@ -435,7 +436,10 @@
         // Sites Management
         async function loadSites() {
             try {
-                const records = await pb.collection('sites').getFullList({ sort: '-created' });
+                const records = await pb.collection('sites').getFullList({ 
+                    sort: '-created',
+                    requestKey: 'loadSites'  // Prevent auto-cancellation
+                });
                 sitesCache = {};
                 records.forEach(r => sitesCache[r.id] = r);
 
@@ -464,7 +468,10 @@
 
         async function loadSiteFilter() {
             try {
-                const records = await pb.collection('sites').getFullList({ sort: 'name' });
+                const records = await pb.collection('sites').getFullList({ 
+                    sort: 'name',
+                    requestKey: 'loadSiteFilter'  // Prevent auto-cancellation
+                });
                 const select = document.getElementById('siteFilter');
                 select.innerHTML = '<option value="">All Sites</option>' +
                     records.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
