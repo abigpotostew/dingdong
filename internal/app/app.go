@@ -18,6 +18,9 @@ import (
 //go:embed templates/*
 var templatesFS embed.FS
 
+//go:embed static/*
+var staticFS embed.FS
+
 // Run initializes and starts the Pocketbase application
 func Run() error {
 	app := pocketbase.New()
@@ -51,6 +54,18 @@ func Run() error {
 		// Tracker script endpoint
 		e.Router.GET("/tracker.js", func(re *core.RequestEvent) error {
 			return h.HandleTrackerScript(re)
+		})
+
+		// Robots.txt - block all crawlers
+		e.Router.GET("/robots.txt", func(re *core.RequestEvent) error {
+			content, err := staticFS.ReadFile("static/robots.txt")
+			if err != nil {
+				return re.Error(500, "Failed to read robots.txt", err)
+			}
+			re.Response.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			re.Response.Header().Set("Cache-Control", "public, max-age=86400")
+			_, err = re.Response.Write(content)
+			return err
 		})
 
 		// Admin portal routes
