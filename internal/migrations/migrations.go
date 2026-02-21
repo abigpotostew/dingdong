@@ -24,6 +24,11 @@ func Register(app *pocketbase.PocketBase) {
 			return err
 		}
 
+		// Create denied_pageviews collection (tracking denied requests)
+		if err := createDeniedPageviewsCollection(app); err != nil {
+			return err
+		}
+
 		return e.Next()
 	})
 }
@@ -164,6 +169,78 @@ func createPageviewsCollection(app *pocketbase.PocketBase) error {
 	collection.AddIndex("idx_pageviews_site", false, "site", "")
 	collection.AddIndex("idx_pageviews_created", false, "created", "")
 	collection.AddIndex("idx_pageviews_path", false, "path", "")
+
+	return app.Save(collection)
+}
+
+// createDeniedPageviewsCollection creates a collection to track denied/unauthorized requests
+func createDeniedPageviewsCollection(app *pocketbase.PocketBase) error {
+	// Check if collection already exists
+	existing, _ := app.FindCollectionByNameOrId("denied_pageviews")
+	if existing != nil {
+		return nil
+	}
+
+	collection := core.NewBaseCollection("denied_pageviews")
+
+	// Admin only access
+	collection.ListRule = nil
+	collection.ViewRule = nil
+	collection.CreateRule = nil
+	collection.UpdateRule = nil
+	collection.DeleteRule = nil
+
+	// Add fields
+	collection.Fields.Add(&core.TextField{
+		Name:     "domain",
+		Required: true,
+		Max:      255,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name:     "origin",
+		Required: true,
+		Max:      2048,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name:     "reason",
+		Required: true,
+		Max:      255,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "path",
+		Max:  2048,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "referrer",
+		Max:  2048,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "user_agent",
+		Max:  1024,
+	})
+
+	collection.Fields.Add(&core.TextField{
+		Name: "ip_hash",
+		Max:  64,
+	})
+
+	collection.Fields.Add(&core.NumberField{
+		Name: "screen_width",
+	})
+
+	collection.Fields.Add(&core.NumberField{
+		Name: "screen_height",
+	})
+
+	// Add indexes
+	collection.AddIndex("idx_denied_domain", false, "domain", "")
+	collection.AddIndex("idx_denied_created", false, "created", "")
+	collection.AddIndex("idx_denied_reason", false, "reason", "")
 
 	return app.Save(collection)
 }

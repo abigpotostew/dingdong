@@ -1,89 +1,34 @@
 package handlers
 
 import (
+	"embed"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/pocketbase/pocketbase/core"
 )
 
-// trackerScript is the JavaScript tracker that gets embedded on client sites
-const trackerScript = `(function() {
-  'use strict';
-  
-  // Find the current script tag to read data attributes
-  var scripts = document.getElementsByTagName('script');
-  var currentScript = scripts[scripts.length - 1];
-  
-  // Configuration - check data-endpoint attribute first, then fall back to default
-  var endpoint = currentScript.getAttribute('data-endpoint') || '{{ENDPOINT}}';
-  // Remove trailing slash if present
-  endpoint = endpoint.replace(/\/$/, '');
-  
-  // Collect page data
-  function collectData() {
-    return {
-      path: window.location.pathname + window.location.search,
-      referrer: document.referrer || '',
-      screen_width: window.screen.width,
-      screen_height: window.screen.height
-    };
-  }
-  
-  // Send ping to server
-  function sendPing() {
-    var data = collectData();
-    
-    // Use fetch with no credentials to avoid CORS issues
-    fetch(endpoint + '/api/ping', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data),
-      mode: 'cors',
-      credentials: 'omit',
-      keepalive: true
-    }).catch(function() {
-      // Silently fail - don't break the page
-    });
-  }
-  
-  // Send ping on page load
-  if (document.readyState === 'complete') {
-    sendPing();
-  } else {
-    window.addEventListener('load', sendPing);
-  }
-  
-  // Also track on page visibility change (for SPAs)
-  var lastPath = window.location.pathname;
-  
-  // Check for SPA navigation
-  function checkNavigation() {
-    if (window.location.pathname !== lastPath) {
-      lastPath = window.location.pathname;
-      sendPing();
-    }
-  }
-  
-  // Listen for history changes (pushState/popState)
-  window.addEventListener('popstate', checkNavigation);
-  
-  // Intercept pushState and replaceState
-  var originalPushState = history.pushState;
-  var originalReplaceState = history.replaceState;
-  
-  history.pushState = function() {
-    originalPushState.apply(this, arguments);
-    checkNavigation();
-  };
-  
-  history.replaceState = function() {
-    originalReplaceState.apply(this, arguments);
-    checkNavigation();
-  };
-})();`
+//go:embed static/tracker.min.js
+var trackerFS embed.FS
+
+var (
+	trackerScript     string
+	trackerScriptOnce sync.Once
+)
+
+// loadTrackerScript loads the minified tracker script from embedded filesystem
+func loadTrackerScript() string {
+	trackerScriptOnce.Do(func() {
+		content, err := trackerFS.ReadFile("static/tracker.min.js")
+		if err != nil {
+			trackerScript = "console.error('Failed to load tracker script');"
+			return
+		}
+		trackerScript = string(content)
+	})
+	return trackerScript
+}
 
 // GetPublicURL returns the public URL for the application
 func GetPublicURL(e *core.RequestEvent) string {
@@ -106,7 +51,7 @@ func GetPublicURL(e *core.RequestEvent) string {
 // HandleTrackerScript serves the JavaScript tracker with the correct endpoint
 func (h *Handlers) HandleTrackerScript(e *core.RequestEvent) error {
 	endpoint := GetPublicURL(e)
-	script := strings.ReplaceAll(trackerScript, "{{ENDPOINT}}", endpoint)
+	script := strings.ReplaceAll(loadTrackerScript(), "{{ENDPOINT}}", endpoint)
 
 	e.Response.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	e.Response.Header().Set("Cache-Control", "public, max-age=86400")

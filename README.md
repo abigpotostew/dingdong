@@ -84,16 +84,22 @@ This is useful when serving the tracker script from a CDN or different domain th
 ```
 dingdong/
 ├── main.go                     # Entry point
+├── Makefile                    # Build commands
+├── scripts/
+│   └── build-tracker.sh        # Minifies tracker JavaScript
 ├── internal/
 │   ├── app/
 │   │   ├── app.go              # Pocketbase setup and routing
 │   │   ├── templates/          # HTML templates for dashboard
-│   │   └── static/             # Static files
+│   │   └── static/             # Static files (robots.txt)
 │   ├── handlers/
 │   │   ├── handlers.go         # Handler struct
 │   │   ├── ping.go             # Ping API endpoint
 │   │   ├── admin.go            # Dashboard handlers
-│   │   └── tracker.go          # JavaScript tracker endpoint
+│   │   ├── tracker.go          # JavaScript tracker endpoint
+│   │   └── static/
+│   │       ├── tracker.src.js  # Tracker source (edit this)
+│   │       └── tracker.min.js  # Minified tracker (generated)
 │   └── migrations/
 │       └── migrations.go       # Database schema setup
 ├── Dockerfile
@@ -136,6 +142,23 @@ dingdong/
 | screen_height | number | Screen height in pixels |
 | created | datetime | Timestamp of the pageview |
 
+### Denied Pageviews Collection
+
+Tracks requests from unregistered domains for monitoring and debugging.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| domain | text | The domain that was denied |
+| origin | text | Full origin header from request |
+| reason | text | Denial reason (`cors_preflight_denied`, `cors_post_denied`, `domain_not_registered`, `site_not_found`) |
+| path | text | Page path (if available) |
+| referrer | text | Referring URL (if available) |
+| user_agent | text | Browser user agent |
+| ip_hash | text | Privacy-preserving hash of IP |
+| screen_width | number | Screen width (if available) |
+| screen_height | number | Screen height (if available) |
+| created | datetime | Timestamp of the denied request |
+
 ## Configuration
 
 ### Environment Variables
@@ -168,9 +191,28 @@ environment:
 export PUBLIC_URL=0.0.0.0:8090
 go run . serve --http=0.0.0.0:8090
 
-# Build for production
+# Build for production (includes tracker minification)
+make build
+
+# Or build without tracker minification (uses existing tracker.min.js)
 go build -o dingdong -ldflags="-s -w" .
 ```
+
+### Building the Tracker Script
+
+The tracker JavaScript (`internal/handlers/static/tracker.src.js`) is minified using esbuild before being embedded in the Go binary. The minified file (`tracker.min.js`) is committed to the repository.
+
+To rebuild after modifying `tracker.src.js`:
+
+```bash
+# Requires esbuild: npm install -g esbuild
+make build-tracker
+
+# Or run the script directly
+./scripts/build-tracker.sh
+```
+
+The minified tracker is ~57% smaller than the source.
 
 ## Privacy
 

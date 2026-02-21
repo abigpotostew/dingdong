@@ -46,11 +46,54 @@ func (h *Handlers) HandlePingPreflight(e *core.RequestEvent) error {
 	// Look up the site by domain (checks primary domain and additional_domains)
 	_, err = FindSiteByDomain(h.app, domain)
 	if err != nil {
+		h.RecordDeniedPageview(e, domain, origin, "cors_preflight_denied", nil)
 		return e.NoContent(http.StatusForbidden)
 	}
 
 	setCORSHeaders(e, origin)
 	return e.NoContent(http.StatusNoContent)
+}
+
+// DeniedPageviewData holds optional data for denied pageview logging
+type DeniedPageviewData struct {
+	Path         string
+	Referrer     string
+	ScreenWidth  int
+	ScreenHeight int
+}
+
+// RecordDeniedPageview logs a denied pageview request to the database
+func (h *Handlers) RecordDeniedPageview(e *core.RequestEvent, domain, origin, reason string, data *DeniedPageviewData) {
+	collection, err := h.app.FindCollectionByNameOrId("denied_pageviews")
+	if err != nil {
+		log.Printf("[denied] Failed to find denied_pageviews collection: %v\n", err)
+		return
+	}
+
+	userAgent := e.Request.Header.Get("User-Agent")
+	clientIP := getRealClientIP(e)
+	ipHash := hashIP(clientIP)
+
+	record := core.NewRecord(collection)
+	record.Set("domain", domain)
+	record.Set("origin", origin)
+	record.Set("reason", reason)
+	record.Set("user_agent", userAgent)
+	record.Set("ip_hash", ipHash)
+
+	if data != nil {
+		record.Set("path", data.Path)
+		record.Set("referrer", data.Referrer)
+		record.Set("screen_width", data.ScreenWidth)
+		record.Set("screen_height", data.ScreenHeight)
+	}
+
+	if err := h.app.Save(record); err != nil {
+		log.Printf("[denied] Failed to save denied pageview: %v\n", err)
+		return
+	}
+
+	log.Printf("[denied] Recorded denied pageview from %s (reason: %s)\n", domain, reason)
 }
 
 // HandlePing processes incoming pageview pings from the JavaScript tracker
@@ -72,9 +115,30 @@ func (h *Handlers) HandlePing(e *core.RequestEvent) error {
 	}
 	domain := ExtractDomain(parsedOrigin.Host)
 
+	// Read body first so we can log it for denied requests
+	body, err := io.ReadAll(e.Request.Body)
+	if err != nil {
+		log.Printf("[ping] Failed to read body: %v\n", err)
+		return e.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Failed to read request body",
+		})
+	}
+
+	// Try to parse request body for logging purposes
+	var req PingRequest
+	if len(body) > 0 {
+		json.Unmarshal(body, &req) // Ignore errors, just best-effort parse
+	}
+
 	site, err := FindSiteByDomain(h.app, domain)
 	if err != nil {
 		log.Printf("[ping] Domain not registered: %s\n", domain)
+		h.RecordDeniedPageview(e, domain, origin, "domain_not_registered", &DeniedPageviewData{
+			Path:         req.Path,
+			Referrer:     req.Referrer,
+			ScreenWidth:  req.ScreenWidth,
+			ScreenHeight: req.ScreenHeight,
+		})
 		return e.JSON(http.StatusForbidden, map[string]string{
 			"error": "Domain not registered",
 		})
@@ -82,16 +146,14 @@ func (h *Handlers) HandlePing(e *core.RequestEvent) error {
 
 	if site == nil {
 		log.Printf("[ping] Site not found: %s\n", domain)
+		h.RecordDeniedPageview(e, domain, origin, "site_not_found", &DeniedPageviewData{
+			Path:         req.Path,
+			Referrer:     req.Referrer,
+			ScreenWidth:  req.ScreenWidth,
+			ScreenHeight: req.ScreenHeight,
+		})
 		return e.JSON(http.StatusNotFound, map[string]string{
 			"error": "not found",
-		})
-	}
-
-	body, err := io.ReadAll(e.Request.Body)
-	if err != nil {
-		log.Printf("[ping] Failed to read body: %v\n", err)
-		return e.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Failed to read request body",
 		})
 	}
 
@@ -102,7 +164,6 @@ func (h *Handlers) HandlePing(e *core.RequestEvent) error {
 		})
 	}
 
-	var req PingRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		log.Printf("[ping] Failed to parse JSON body: %v, body: %s\n", err, string(body))
 		return e.JSON(http.StatusBadRequest, map[string]string{

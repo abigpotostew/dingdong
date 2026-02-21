@@ -41,14 +41,14 @@ func Run() error {
 
 		// PING API endpoint with custom CORS handling
 		e.Router.POST("/api/ping", func(re *core.RequestEvent) error {
-			if err := handlePingCORS(app, re); err != nil {
+			if err := handlePingCORS(app, h, re); err != nil {
 				return err
 			}
 			return h.HandlePing(re)
 		})
 
 		e.Router.OPTIONS("/api/ping", func(re *core.RequestEvent) error {
-			return handlePingPreflight(app, re)
+			return handlePingPreflight(app, h, re)
 		})
 
 		// Tracker script endpoint
@@ -96,7 +96,7 @@ func Run() error {
 }
 
 // handlePingCORS sets CORS headers for POST requests to /api/ping
-func handlePingCORS(app *pocketbase.PocketBase, e *core.RequestEvent) error {
+func handlePingCORS(app *pocketbase.PocketBase, h *handlers.Handlers, e *core.RequestEvent) error {
 	origin := e.Request.Header.Get("Origin")
 	if origin == "" {
 		return nil
@@ -112,6 +112,8 @@ func handlePingCORS(app *pocketbase.PocketBase, e *core.RequestEvent) error {
 	// Check if domain is registered
 	_, err = handlers.FindSiteByDomain(app, domain)
 	if err != nil {
+		// Record denied pageview - don't have body data here
+		h.RecordDeniedPageview(e, domain, origin, "cors_post_denied", nil)
 		return nil // Let the handler deal with unregistered domains
 	}
 
@@ -125,7 +127,7 @@ func handlePingCORS(app *pocketbase.PocketBase, e *core.RequestEvent) error {
 }
 
 // handlePingPreflight handles CORS preflight requests for /api/ping
-func handlePingPreflight(app *pocketbase.PocketBase, e *core.RequestEvent) error {
+func handlePingPreflight(app *pocketbase.PocketBase, h *handlers.Handlers, e *core.RequestEvent) error {
 	origin := e.Request.Header.Get("Origin")
 	if origin == "" {
 		return e.NoContent(http.StatusNoContent)
@@ -141,6 +143,8 @@ func handlePingPreflight(app *pocketbase.PocketBase, e *core.RequestEvent) error
 	// Check if domain is registered
 	_, err = handlers.FindSiteByDomain(app, domain)
 	if err != nil {
+		// Record denied pageview
+		h.RecordDeniedPageview(e, domain, origin, "cors_preflight_denied", nil)
 		return e.NoContent(http.StatusForbidden)
 	}
 
