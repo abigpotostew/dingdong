@@ -237,9 +237,8 @@ func createDeniedPageviewsCollection(app *pocketbase.PocketBase) error {
 		Name: "screen_height",
 	})
 
-	// Add indexes
+	// Add indexes (note: 'created' is a system field, can't index before save)
 	collection.AddIndex("idx_denied_domain", false, "domain", "")
-	collection.AddIndex("idx_denied_created", false, "created", "")
 	collection.AddIndex("idx_denied_reason", false, "reason", "")
 
 	return app.Save(collection)
